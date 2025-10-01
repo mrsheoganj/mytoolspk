@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MergeFile Dashboard</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- SheetJS (xlsx) library for handling Excel files -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <!-- Google Fonts: Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <style>
+        /* Custom Styles */
+        body {
+            font-family: 'Inter', sans-serif;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            background-color: #f8fafc; /* Light gray background */
+        }
+        /* Custom scrollbar for a more modern look */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #e2e8f0;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #94a3b8;
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #64748b;
+        }
+        /* Styles for the file input */
+        .file-input-label {
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            border: 2px dashed #e2e8f0;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            transition: all 0.2s ease-in-out;
+        }
+        .file-input-label:hover {
+            background-color: #f1f5f9;
+            border-color: #cbd5e1;
+        }
+        /* Simple spinner for loading state */
+        .spinner {
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid #3b82f6; /* Blue spinner */
+            border-radius: 50%;
+            width: 16px;
+            height: 16px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        /* Prevent layout shift on table header when scrolling */
+        thead th {
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            background-color: #f8fafc;
+        }
+    </style>
+</head>
+<body class="flex h-screen overflow-hidden">
+
+    <!-- Sidebar -->
+    <aside class="w-80 bg-white border-r border-slate-200 flex flex-col h-full">
+        <div class="p-4 border-b border-slate-200">
+            <img src="https://psmvision.com/ams/public//assets/img/logo.png" alt="Software Logo" class="h-10">
+        </div>
+
+        <div class="p-4 space-y-6 flex-grow overflow-y-auto">
+            <!-- File Inputs -->
+            <div>
+                <h3 class="font-semibold text-slate-800 mb-2">1. Upload Files</h3>
+                <div class="space-y-4">
+                    <!-- PSM File Input -->
+                    <div>
+                        <label for="psmFile" class="text-sm font-medium text-slate-700">PSM File</label>
+                        <label for="psmFile" class="file-input-label mt-1 text-slate-500">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
+                            <span id="psmFileName">Click to upload</span>
+                        </label>
+                        <input id="psmFile" type="file" class="hidden" accept=".xlsx, .xls">
+                    </div>
+                    <!-- Nuk File Input -->
+                    <div>
+                        <label for="nukFile" class="text-sm font-medium text-slate-700">Nuk File</label>
+                        <label for="nukFile" class="file-input-label mt-1 text-slate-500">
+                             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
+                            <span id="nukFileName">Click to upload</span>
+                        </label>
+                        <input id="nukFile" type="file" class="hidden" accept=".xlsx, .xls">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Merge Status -->
+            <div id="merge-status" class="text-sm text-center text-slate-500 min-h-[40px] flex items-center justify-center"></div>
+
+            <!-- Column Visibility -->
+            <div>
+                <h3 class="font-semibold text-slate-800 mb-2">2. Column Visibility</h3>
+                <div id="column-toggles" class="space-y-2 max-h-96 overflow-y-auto pr-2">
+                    <p class="text-sm text-slate-500">Upload files to see columns.</p>
+                </div>
+            </div>
+
+        </div>
+
+        <div class="p-4 border-t border-slate-200">
+             <button id="export-full-btn" class="w-full bg-emerald-600 text-white font-semibold py-2 px-4 rounded-md hover:bg-emerald-700 transition duration-200 flex items-center justify-center space-x-2 disabled:bg-emerald-300 disabled:cursor-not-allowed" disabled>
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+                <span>Export Full Report</span>
+            </button>
+            <p class="text-xs text-center text-slate-500 mt-4">@developed by Prashant Kumar</p>
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="flex-1 flex flex-col bg-slate-50 overflow-hidden min-h-0">
+        <!-- Header -->
+        <div class="p-4 border-b border-slate-200 bg-white flex items-center justify-between flex-wrap gap-4">
+            <div class="relative w-full max-w-xs">
+                <input type="text" id="searchInput" class="pl-10 pr-4 py-2 border border-slate-300 rounded-md w-full focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition" placeholder="Search by SKU or Name...">
+                <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <svg class="h-5 w-5 text-slate-400" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" x2="16.65" y1="21" y2="16.65"/></svg>
+                </div>
+            </div>
+            <button id="export-table-btn" class="bg-blue-600 text-white font-semibold py-2 px-4 rounded-md hover:bg-blue-700 transition duration-200 flex items-center justify-center space-x-2 disabled:bg-blue-300 disabled:cursor-not-allowed" disabled>
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+                <span>Export Table View</span>
+            </button>
+        </div>
+
+        <!-- Table -->
+        <div class="flex-grow overflow-auto">
+            <table class="w-full text-sm text-left text-slate-500">
+                <thead class="text-xs text-slate-700 uppercase bg-slate-100">
+                    <!-- Table headers will be dynamically inserted here -->
+                </thead>
+                <tbody id="dataTableBody" class="bg-white">
+                    <tr>
+                        <td colspan="100%" class="text-center p-8 text-slate-500">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="mx-auto mb-4 text-slate-400"><path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Z"/><path d="M15 2v20"/><path d="M8 7h4"/><path d="M8 12h4"/><path d="M8 17h4"/></svg>
+                            <h3 class="text-lg font-semibold text-slate-700">No data to display</h3>
+                            <p class="mt-1">Please upload PSM and Nuk files to begin.</p>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+    </main>
+</body>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        // State variables
+        let psmData = [];
+        let nukData = [];
+        let mergedData = [];
+        let allHeaders = [];
+        let visibleColumns = new Set();
+
+        // DOM Elements
+        const psmFileInput = document.getElementById('psmFile');
+        const nukFileInput = document.getElementById('nukFile');
+        const psmFileName = document.getElementById('psmFileName');
+        const nukFileName = document.getElementById('nukFileName');
+        const mergeStatus = document.getElementById('merge-status');
+        const columnToggles = document.getElementById('column-toggles');
+        const searchInput = document.getElementById('searchInput');
+        const tableBody = document.getElementById('dataTableBody');
+        const tableHead = document.querySelector('table thead');
+        const exportFullBtn = document.getElementById('export-full-btn');
+        const exportTableBtn = document.getElementById('export-table-btn');
+
+        // --- FILE HANDLING ---
+        if (psmFileInput) psmFileInput.addEventListener('change', (e) => handleFileUpload(e, 'psm'));
+        if (nukFileInput) nukFileInput.addEventListener('change', (e) => handleFileUpload(e, 'nuk'));
+
+        function handleFileUpload(event, type) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const fileNameEl = type === 'psm' ? psmFileName : nukFileName;
+            fileNameEl.textContent = file.name;
+            fileNameEl.classList.remove('text-slate-500');
+            fileNameEl.classList.add('text-blue-600', 'font-semibold');
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const sheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[sheetName];
+                    const jsonData = XLSX.utils.sheet_to_json(worksheet);
+
+                    if (!jsonData || jsonData.length === 0) {
+                        updateStatus(`Warning: No data found in ${file.name}.`, true);
+                        if (type === 'psm') { psmData = []; } else { nukData = []; }
+                        return;
+                    }
+
+                    if (type === 'psm') {
+                        psmData = jsonData;
+                    } else {
+                        nukData = jsonData;
+                    }
+
+                    if (psmData.length > 0 && nukData.length > 0) {
+                        mergeFiles();
+                    }
+                } catch (error) {
+                    console.error("Error processing file:", error);
+                    updateStatus(`Error reading ${file.name}`, true);
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        /**
+         * Finds a unique identifier (EAN or SKU) in a row of data, checking common variations.
+         * @param {object} row - The row object from the spreadsheet.
+         * @returns {string|null} The found key (EAN/SKU) or null if not found.
+         */
+        function findKey(row) {
+            const possibleKeys = ['EAN', 'ean', 'SKU', 'sku', 'Barcode', 'barcode'];
+            for (const key of possibleKeys) {
+                if (row[key] !== undefined && row[key] !== null && String(row[key]).trim() !== '') {
+                    return String(row[key]).trim();
+                }
+            }
+            return null;
+        }
+
+        // --- MERGE LOGIC ---
+        function mergeFiles() {
+            if (psmData.length === 0 || nukData.length === 0) return;
+            
+            updateStatus('Merging files...', false, true);
+            
+            setTimeout(() => { // Simulate processing time
+                mergedData = [];
+                const psmMap = new Map();
+                const nukMap = new Map();
+                const allKeys = new Set();
+
+                // Populate PSM map
+                psmData.forEach(row => {
+                    const key = findKey(row);
+                    if (key) {
+                        psmMap.set(key, row);
+                        allKeys.add(key);
+                    }
+                });
+
+                // Populate NUK map
+                nukData.forEach(row => {
+                    const key = findKey(row);
+                    if (key) {
+                        nukMap.set(key, row);
+                        allKeys.add(key);
+                    }
+                });
+                
+                if (allKeys.size === 0) {
+                    updateStatus('Merge failed: Could not find EAN or SKU columns in files.', true);
+                    return;
+                }
+
+                // Helper function to build the aging columns for a row
+                const buildAgingColumns = (finalRow, psmRow = {}, nukRow = {}) => {
+                    const psm_0_30 = psmRow['0-30 days'] || 0;
+                    const nuk_0_30 = nukRow['0-30 days'] || 0;
+                    finalRow['0-30 days PSM'] = psm_0_30;
+                    finalRow['0-30 days NUK'] = nuk_0_30;
+                    finalRow['0-30 days TOTAL'] = psm_0_30 + nuk_0_30;
+
+                    const psm_30_60 = psmRow['30-60 days'] || 0;
+                    const nuk_30_60 = nukRow['30-60 days'] || 0;
+                    finalRow['30-60 days PSM'] = psm_30_60;
+                    finalRow['30-60 days NUK'] = nuk_30_60;
+                    finalRow['30-60 days Total'] = psm_30_60 + nuk_30_60;
+
+                    const psm_60_90 = psmRow['60-90 days'] || 0;
+                    const nuk_60_90 = nukRow['60-90 days'] || 0;
+                    finalRow['60-90 days PSM'] = psm_60_90;
+                    finalRow['60-90 days Nuk'] = nuk_60_90; // Match typo from sample
+                    finalRow['60-90 days Total'] = psm_60_90 + nuk_60_90;
+
+                    const psm_90_120 = psmRow['90-120 days'] || 0;
+                    const nuk_90_120 = nukRow['90-120 days'] || 0;
+                    finalRow['90-120 days PSM'] = psm_90_120;
+                    finalRow['90-120 days NUK'] = nuk_90_120;
+                    finalRow['90-120 days Total'] = psm_90_120 + nuk_90_120;
+
+                    const psm_120_plus = psmRow['120+ days'] || 0;
+                    const nuk_120_plus = nukRow['120+ days'] || 0;
+                    finalRow['120+ days PSM'] = psm_120_plus;
+                    finalRow['120+ days Nuk'] = nuk_120_plus; // Match typo from sample
+                    finalRow['120+ days Total'] = psm_120_plus + nuk_120_plus;
+                };
+
+                // Iterate over all unique keys from both files
+                allKeys.forEach(key => {
+                    const psmRow = psmMap.get(key) || {};
+                    const nukRow = nukMap.get(key) || {};
+                    const finalRow = {};
+                    
+                    finalRow['SKU'] = psmRow['SKU'] || nukRow['SKU'] || key; // Use key as fallback
+                    finalRow['Product Name'] = psmRow['Product Name'] || nukRow['Product Name'] || '';
+                    finalRow['Last Purchase Price PSM'] = psmRow['Last Purchase Price'] || 0;
+                    finalRow['Last Purchase Price NUK'] = nukRow['Last Purchase Price'] || 0;
+                    
+                    buildAgingColumns(finalRow, psmRow, nukRow);
+                    
+                    mergedData.push(finalRow);
+                });
+
+                setupColumns();
+                renderTable();
+                updateStatus(`Successfully merged ${mergedData.length} rows.`, false);
+                enableButtons();
+            }, 500);
+        }
+
+        // --- TABLE RENDERING & COLUMNS ---
+        function setupColumns() {
+            // Use a fixed header list based on the desired output format
+            allHeaders = [
+                'SKU', 'Product Name', 'Last Purchase Price PSM', 'Last Purchase Price NUK',
+                '0-30 days PSM', '0-30 days NUK', '0-30 days TOTAL',
+                '30-60 days PSM', '30-60 days NUK', '30-60 days Total',
+                '60-90 days PSM', '60-90 days Nuk', '60-90 days Total',
+                '90-120 days PSM', '90-120 days NUK', '90-120 days Total',
+                '120+ days PSM', '120+ days Nuk', '120+ days Total'
+            ];
+            
+            visibleColumns = new Set(allHeaders);
+            renderColumnToggles();
+        }
+
+        function renderColumnToggles() {
+            columnToggles.innerHTML = '';
+            allHeaders.forEach(header => {
+                const div = document.createElement('div');
+                div.className = 'flex items-center';
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.id = `toggle-${header}`;
+                checkbox.value = header;
+                checkbox.checked = visibleColumns.has(header);
+                checkbox.className = 'h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500';
+
+                const label = document.createElement('label');
+                label.htmlFor = `toggle-${header}`;
+                label.textContent = header;
+                label.className = 'ml-2 block text-sm text-gray-900';
+                
+                div.appendChild(checkbox);
+                div.appendChild(label);
+                columnToggles.appendChild(div);
+
+                checkbox.addEventListener('change', (e) => {
+                    if (e.target.checked) {
+                        visibleColumns.add(header);
+                    } else {
+                        visibleColumns.delete(header);
+                    }
+                    renderTable();
+                });
+            });
+        }
+
+        function renderTable() {
+            if (mergedData.length === 0) {
+                 // Clear table if there's no data, but don't show the "no results" message yet
+                 tableHead.innerHTML = '';
+                 tableBody.innerHTML = `<tr><td colspan="100%" class="text-center p-8 text-slate-500"><svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="mx-auto mb-4 text-slate-400"><path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Z"/><path d="M15 2v20"/><path d="M8 7h4"/><path d="M8 12h4"/><path d="M8 17h4"/></svg><h3 class="text-lg font-semibold text-slate-700">No data to display</h3><p class="mt-1">Please upload PSM and Nuk files to begin.</p></td></tr>`;
+                 return;
+            }
+            if (!searchInput) return;
+
+            // Filter data based on search
+            const searchTerm = searchInput.value.toLowerCase();
+            const filteredData = mergedData.filter(row => {
+                if (!searchTerm) return true;
+                const sku = String(row['SKU'] || '').toLowerCase();
+                const name = String(row['Product Name'] || '').toLowerCase();
+                return sku.includes(searchTerm) || name.includes(searchTerm);
+            });
+            
+            // Render Headers
+            if (tableHead) {
+                tableHead.innerHTML = '';
+                const headerRow = document.createElement('tr');
+                allHeaders.forEach(header => {
+                    if (visibleColumns.has(header)) {
+                        const th = document.createElement('th');
+                        th.scope = 'col';
+                        th.className = 'px-6 py-3';
+                        th.textContent = header;
+                        headerRow.appendChild(th);
+                    }
+                });
+                tableHead.appendChild(headerRow);
+            }
+
+            // Render Body
+            if (tableBody) {
+                tableBody.innerHTML = '';
+                if (filteredData.length === 0) {
+                     tableBody.innerHTML = `<tr><td colspan="${visibleColumns.size || 1}" class="text-center p-8"><h3 class="font-semibold">No results found for "${searchInput.value}"</h3></td></tr>`;
+                     return;
+                }
+
+                filteredData.forEach(row => {
+                    const tr = document.createElement('tr');
+                    tr.className = 'border-b hover:bg-slate-50';
+                    allHeaders.forEach(header => {
+                         if (visibleColumns.has(header)) {
+                            const td = document.createElement('td');
+                            td.className = 'px-6 py-4 whitespace-nowrap';
+                            td.textContent = row[header] !== undefined && row[header] !== null ? row[header] : '';
+                            tr.appendChild(td);
+                         }
+                    });
+                    tableBody.appendChild(tr);
+                });
+            }
+        }
+        
+        if (searchInput) searchInput.addEventListener('input', renderTable);
+
+        // --- EXPORT LOGIC ---
+        function exportToXLSX(data, fileName, columns) {
+            // Re-order the data to match the column order for export
+            const dataToExport = data.map(row => {
+                const newRow = {};
+                columns.forEach(col => {
+                    newRow[col] = row[col];
+                });
+                return newRow;
+            });
+
+            const worksheet = XLSX.utils.json_to_sheet(dataToExport, {header: columns});
+            const workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, worksheet, 'Merged Data');
+            XLSX.writeFile(workbook, fileName);
+        }
+        
+        if (exportFullBtn) {
+            exportFullBtn.addEventListener('click', () => {
+                 exportToXLSX(mergedData, 'Full_Merged_Report.xlsx', allHeaders);
+            });
+        }
+
+        if (exportTableBtn) {
+            exportTableBtn.addEventListener('click', () => {
+                const searchTerm = searchInput.value.toLowerCase();
+                const filteredData = mergedData.filter(row => {
+                    if (!searchTerm) return true;
+                    const sku = String(row['SKU'] || '').toLowerCase();
+                    const name = String(row['Product Name'] || '').toLowerCase();
+                    return sku.includes(searchTerm) || name.includes(searchTerm);
+                });
+                exportToXLSX(filteredData, 'Table_View_Report.xlsx', Array.from(visibleColumns));
+            });
+        }
+
+        // --- UI UTILITIES ---
+        function updateStatus(message, isError = false, isLoading = false) {
+            if (!mergeStatus) return;
+            mergeStatus.innerHTML = '';
+            if (isLoading) {
+                const spinner = document.createElement('div');
+                spinner.className = 'spinner';
+                mergeStatus.appendChild(spinner);
+            }
+            const text = document.createElement('span');
+            text.textContent = message;
+            text.className = isError ? 'text-red-500 font-semibold' : 'text-slate-600';
+            if(isLoading) text.className += ' ml-2';
+
+            mergeStatus.appendChild(text);
+        }
+
+        function enableButtons() {
+            if(exportFullBtn) exportFullBtn.disabled = false;
+            if(exportTableBtn) exportTableBtn.disabled = false;
+        }
+    });
+</script>
+
+</html>
+

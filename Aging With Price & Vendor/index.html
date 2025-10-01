@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aging PSM-NUK Stock Merger</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+</head>
+<body>
+    <div class="card">
+        <div class="card-header">
+            <img src="https://psmvision.com/ams/public//assets/img/logo.png" alt="PSM Vision Logo" class="header-logo">
+            <h2>Aging PSM-NUK Stock Merger</h2>
+        </div>
+        <div class="card-body">
+            <p class="instructions">
+                Select your PSM and NUK stock files (.xlsx) to merge them by EAN.
+            </p>
+            <div class="file-upload-area">
+                <div class="file-input-wrapper">
+                    <label for="psmFile" class="file-label">
+                        <i class="fas fa-upload"></i>
+                        <span>Choose PSM File</span>
+                    </label>
+                    <input type="file" id="psmFile" class="file-input" accept=".xlsx">
+                    <span id="psmFileName" class="file-name">No file chosen</span>
+                </div>
+                <div class="file-input-wrapper">
+                    <label for="nukFile" class="file-label">
+                        <i class="fas fa-upload"></i>
+                        <span>Choose NUK File</span>
+                    </label>
+                    <input type="file" id="nukFile" class="file-input" accept=".xlsx">
+                    <span id="nukFileName" class="file-name">No file chosen</span>
+                </div>
+            </div>
+            <button id="mergeBtn" class="action-btn">
+                <i class="fas fa-sync-alt"></i> Merge Files
+            </button>
+            <div id="loader" class="loader" style="display: none;"></div>
+            <button id="downloadBtn" class="action-btn download-btn" style="display: none;">
+                <i class="fas fa-download"></i> Download Merged File
+            </button>
+        </div>
+        <div class="card-footer">
+            <p>@Developed By Prashant Kumar</p>
+        </div>
+    </div>
+    <script src="script.js"></script>
+</body>
+</html>

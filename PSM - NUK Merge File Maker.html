@@ -1,0 +1,731 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stock Merger Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f1f5f9; /* slate-100 */
+        }
+        /* A more subtle, modern scrollbar */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; border: 2px solid #f1f5f9; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        .sidebar {
+            transition: transform 0.3s ease-in-out;
+        }
+        @media (max-width: 768px) {
+            .sidebar {
+                transform: translateX(-100%);
+                z-index: 40;
+            }
+            .sidebar.open {
+                transform: translateX(0);
+            }
+        }
+        #previewTable th {
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+        .file-drop-zone.drag-over {
+            border-color: #2563eb; /* blue-600 */
+            background-color: #eff6ff; /* blue-50 */
+        }
+    </style>
+</head>
+<body class="h-screen overflow-hidden">
+<div class="flex h-full bg-slate-100">
+    <!-- Sidebar -->
+    <aside id="sidebar" class="sidebar absolute md:relative w-80 h-full bg-white border-r border-slate-200 flex flex-col p-4 transition-transform duration-300 ease-in-out">
+        <!-- Header -->
+        <header class="flex items-center space-x-3 mb-6 flex-shrink-0">
+            <img src="https://psmvision.com/ams/public//assets/img/logo.png" alt="PSM Vision Logo" class="h-10 w-10 rounded-lg object-contain">
+            <div>
+                <h1 class="text-xl font-bold text-slate-800">Stock Merger</h1>
+                <p class="text-sm text-slate-500">Dashboard</p>
+            </div>
+        </header>
+
+        <!-- Controls -->
+        <div class="flex-grow overflow-y-auto pr-2 -mr-2">
+            <!-- File Sources -->
+            <section>
+                <h2 class="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-2">Sources</h2>
+                <div id="fileSourcesContainer" class="space-y-4">
+                    <!-- PSM File Input -->
+                    <div class="bg-slate-50 border border-slate-200 rounded-lg p-3">
+                        <p class="text-sm font-semibold text-slate-700 mb-2">PSM Source</p>
+                         <label for="psmFile" class="file-drop-zone flex items-center space-x-3 text-sm p-2.5 border-2 border-dashed border-slate-300 rounded-md cursor-pointer hover:border-blue-500 hover:bg-white transition-colors">
+                            <div class="flex-shrink-0 w-10 h-10 rounded-full bg-slate-200 flex items-center justify-center">
+                                <svg id="psmFileIconUpload" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
+                                <svg id="psmFileIconFile" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-slate-500 hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
+                            </div>
+                            <div class="flex-1 min-w-0">
+                                <p id="psmFileName" class="font-medium text-slate-700 truncate">Choose file...</p>
+                                <p class="text-xs text-slate-500">Or drag and drop</p>
+                            </div>
+                        </label>
+                        <input type="file" id="psmFile" class="hidden source-file-input" accept=".csv, .xlsx, .xls">
+                    </div>
+                    <!-- NUK File Input -->
+                    <div class="bg-slate-50 border border-slate-200 rounded-lg p-3">
+                        <p class="text-sm font-semibold text-slate-700 mb-2">NUK Source</p>
+                        <label for="nukFile" class="file-drop-zone flex items-center space-x-3 text-sm p-2.5 border-2 border-dashed border-slate-300 rounded-md cursor-pointer hover:border-blue-500 hover:bg-white transition-colors">
+                            <div class="flex-shrink-0 w-10 h-10 rounded-full bg-slate-200 flex items-center justify-center">
+                                <svg id="nukFileIconUpload" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
+                                <svg id="nukFileIconFile" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-slate-500 hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
+                            </div>
+                            <div class="flex-1 min-w-0">
+                                <p id="nukFileName" class="font-medium text-slate-700 truncate">Choose file...</p>
+                                <p class="text-xs text-slate-500">Or drag and drop</p>
+                            </div>
+                        </label>
+                        <input type="file" id="nukFile" class="hidden source-file-input" accept=".csv, .xlsx, .xls">
+                    </div>
+                     <!-- UK Price File Input -->
+                    <div class="bg-slate-50 border border-slate-200 rounded-lg p-3">
+                        <p class="text-sm font-semibold text-slate-700 mb-2">UK Price Source <span class="text-xs font-normal text-slate-500">(Optional)</span></p>
+                        <label for="ukPriceFile" class="file-drop-zone flex items-center space-x-3 text-sm p-2.5 border-2 border-dashed border-slate-300 rounded-md cursor-pointer hover:border-blue-500 hover:bg-white transition-colors">
+                            <div class="flex-shrink-0 w-10 h-10 rounded-full bg-slate-200 flex items-center justify-center">
+                                <svg id="ukPriceFileIconUpload" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
+                                <svg id="ukPriceFileIconFile" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-slate-500 hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
+                            </div>
+                            <div class="flex-1 min-w-0">
+                                <p id="ukPriceFileName" class="font-medium text-slate-700 truncate">Choose file...</p>
+                                <p class="text-xs text-slate-500">Or drag and drop</p>
+                            </div>
+                        </label>
+                        <input type="file" id="ukPriceFile" class="hidden source-file-input" accept=".csv, .xlsx, .xls">
+                    </div>
+                     <!-- International Price File Input -->
+                    <div class="bg-slate-50 border border-slate-200 rounded-lg p-3">
+                        <p class="text-sm font-semibold text-slate-700 mb-2">Int'l Price Source <span class="text-xs font-normal text-slate-500">(Optional)</span></p>
+                        <label for="intlPriceFile" class="file-drop-zone flex items-center space-x-3 text-sm p-2.5 border-2 border-dashed border-slate-300 rounded-md cursor-pointer hover:border-blue-500 hover:bg-white transition-colors">
+                            <div class="flex-shrink-0 w-10 h-10 rounded-full bg-slate-200 flex items-center justify-center">
+                                <svg id="intlPriceFileIconUpload" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
+                                <svg id="intlPriceFileIconFile" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-slate-500 hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
+                            </div>
+                            <div class="flex-1 min-w-0">
+                                <p id="intlPriceFileName" class="font-medium text-slate-700 truncate">Choose file...</p>
+                                <p class="text-xs text-slate-500">Or drag and drop</p>
+                            </div>
+                        </label>
+                        <input type="file" id="intlPriceFile" class="hidden source-file-input" accept=".csv, .xlsx, .xls">
+                    </div>
+                </div>
+            </section>
+
+            <!-- Filters -->
+            <section class="mt-6 border-t border-slate-200 pt-4">
+                <h2 class="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-3">Filters</h2>
+                <div class="space-y-4">
+                     <div class="relative">
+                         <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                             <svg class="w-5 h-5 text-slate-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" /></svg>
+                         </div>
+                         <input type="text" id="searchInput" placeholder="Search SKU or Name..." class="w-full p-2 pl-10 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 transition disabled:bg-slate-100" disabled>
+                     </div>
+                    <div class="flex items-center justify-between">
+                        <label for="gslToggle" class="text-sm font-medium text-slate-700">Remove GSL</label>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                          <input type="checkbox" id="gslToggle" class="sr-only peer" disabled>
+                          <div class="w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                        </label>
+                    </div>
+                    <div class="border-t border-slate-200 pt-4 space-y-2">
+                         <button id="filterStockButton10" class="w-full text-sm py-2 bg-white border border-slate-300 text-slate-700 font-semibold rounded-lg hover:bg-slate-100 transition disabled:bg-slate-100 disabled:cursor-not-allowed" disabled>Filter Stock >= 10</button>
+                         <button id="filterStockButton20" class="w-full text-sm py-2 bg-white border border-slate-300 text-slate-700 font-semibold rounded-lg hover:bg-slate-100 transition disabled:bg-slate-100 disabled:cursor-not-allowed" disabled>Filter Stock >= 20</button>
+                         <button id="showAllButton" class="w-full text-sm py-2 bg-white border border-slate-300 text-slate-700 font-semibold rounded-lg hover:bg-slate-100 transition disabled:bg-slate-100 disabled:cursor-not-allowed" disabled>Show All / Reset</button>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <!-- Actions -->
+        <div class="mt-6 border-t border-slate-200 pt-4 space-y-3 flex-shrink-0">
+             <button id="mergeButton" class="w-full bg-blue-600 text-white font-bold py-3 px-4 rounded-lg shadow-md hover:bg-blue-700 active:scale-[0.99] transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-slate-400 disabled:cursor-not-allowed">
+                Merge & Process
+            </button>
+            <button id="exportButton" class="w-full bg-green-600 text-white font-bold py-3 px-4 rounded-lg shadow-md hover:bg-green-700 active:scale-[0.99] transition-all focus:outline-none focus:ring-2 focus:ring-green-500 disabled:bg-slate-400 disabled:cursor-not-allowed" disabled>
+                Download Full Report
+            </button>
+             <button id="exportFloorstockButton" class="w-full bg-purple-600 text-white font-bold py-3 px-4 rounded-lg shadow-md hover:bg-purple-700 active:scale-[0.99] transition-all focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:bg-slate-400 disabled:cursor-not-allowed" disabled>
+                Download Floorstock Report
+            </button>
+            <button id="exportViewButton10" class="w-full bg-slate-600 text-white font-bold py-3 px-4 rounded-lg shadow-md hover:bg-slate-700 active:scale-[0.99] transition-all focus:outline-none focus:ring-2 focus:ring-slate-500 disabled:bg-slate-400 disabled:cursor-not-allowed" disabled>
+                Download >=10 Stock List
+            </button>
+            <button id="exportViewButton20" class="w-full bg-slate-600 text-white font-bold py-3 px-4 rounded-lg shadow-md hover:bg-slate-700 active:scale-[0.99] transition-all focus:outline-none focus:ring-2 focus:ring-slate-500 disabled:bg-slate-400 disabled:cursor-not-allowed" disabled>
+                Download >=20 Stock List
+            </button>
+        </div>
+         <div class="mt-4 text-center">
+            <p class="text-xs text-slate-400">Developed by Prashant Kumar</p>
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="flex-1 flex flex-col h-full p-4 md:p-6 overflow-hidden">
+         <!-- Mobile Header -->
+        <div class="md:hidden flex items-center justify-between mb-4">
+            <h1 class="text-xl font-bold text-slate-800">Stock Dashboard</h1>
+            <button id="menuButton" class="p-2 rounded-md hover:bg-slate-200">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16m-7 6h7" /></svg>
+            </button>
+        </div>
+        
+        <div id="welcomeScreen" class="flex-1 flex flex-col items-center justify-center text-center bg-white rounded-xl border border-slate-200 p-8">
+             <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16 text-slate-300 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1"><path stroke-linecap="round" stroke-linejoin="round" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V7a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+            <h2 class="text-2xl font-bold text-slate-700">Ready to Process Your Data</h2>
+            <p class="text-slate-500 mt-2 max-w-md">Upload the PSM and NUK source files in the left panel and click "Merge & Process" to begin.</p>
+        </div>
+        
+        <div id="dataScreen" class="hidden flex-1 grid grid-rows-[auto_1fr] gap-4 min-h-0">
+             <!-- Summary Cards -->
+            <div id="summaryCards" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div class="bg-white p-4 rounded-lg border border-slate-200"><h3 class="text-sm font-medium text-slate-500">Total Products</h3><p id="totalProductsCard" class="text-2xl lg:text-3xl font-bold text-slate-800">0</p></div>
+                <div class="bg-white p-4 rounded-lg border border-slate-200"><h3 class="text-sm font-medium text-slate-500">Total Stock</h3><p id="totalStockCard" class="text-2xl lg:text-3xl font-bold text-slate-800">0</p></div>
+                <div class="bg-white p-4 rounded-lg border border-slate-200"><h3 class="text-sm font-medium text-slate-500">High Stock Items</h3><p id="highStockCard" class="text-2xl lg:text-3xl font-bold text-slate-800">0</p></div>
+                <div class="bg-white p-4 rounded-lg border border-slate-200"><h3 class="text-sm font-medium text-slate-500">Pending Orders</h3><p id="pendingOrdersCard" class="text-2xl lg:text-3xl font-bold text-slate-800">0</p></div>
+            </div>
+
+            <!-- Data Table -->
+            <div class="overflow-auto bg-white rounded-xl border border-slate-200">
+                <table id="previewTable" class="min-w-full">
+                    <thead id="tableHeader" class="text-blue-800 uppercase text-xs"></thead>
+                    <tbody id="tableBody" class="text-slate-600 text-sm font-light divide-y divide-slate-200"></tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+</div>
+<script>
+// --- START OF CONSOLIDATED JAVASCRIPT ---
+document.addEventListener('DOMContentLoaded', () => {
+
+// --- STATE MANAGEMENT ---
+let state = {
+    psmFile: null,
+    nukFile: null,
+    ukPriceFile: null,
+    intlPriceFile: null,
+    fullMergedData: [],
+    currentlyDisplayedData: [],
+    ukPriceData: new Map(),
+    intlPriceData: new Map(),
+    stockFilterThreshold: 0, // 0 for no filter, 10 for >=10, 20 for >=20
+};
+
+// --- DOM ELEMENTS ---
+const elements = {
+    sidebar: document.getElementById('sidebar'),
+    menuButton: document.getElementById('menuButton'),
+    psmFileInput: document.getElementById('psmFile'),
+    nukFileInput: document.getElementById('nukFile'),
+    ukPriceFileInput: document.getElementById('ukPriceFile'),
+    intlPriceFileInput: document.getElementById('intlPriceFile'),
+    psmFileName: document.getElementById('psmFileName'),
+    nukFileName: document.getElementById('nukFileName'),
+    ukPriceFileName: document.getElementById('ukPriceFileName'),
+    intlPriceFileName: document.getElementById('intlPriceFileName'),
+    mergeButton: document.getElementById('mergeButton'),
+    exportButton: document.getElementById('exportButton'),
+    exportViewButton10: document.getElementById('exportViewButton10'),
+    exportViewButton20: document.getElementById('exportViewButton20'),
+    exportFloorstockButton: document.getElementById('exportFloorstockButton'),
+    searchInput: document.getElementById('searchInput'),
+    gslToggle: document.getElementById('gslToggle'),
+    filterStockButton10: document.getElementById('filterStockButton10'),
+    filterStockButton20: document.getElementById('filterStockButton20'),
+    showAllButton: document.getElementById('showAllButton'),
+    welcomeScreen: document.getElementById('welcomeScreen'),
+    dataScreen: document.getElementById('dataScreen'),
+    tableHeader: document.getElementById('tableHeader'),
+    tableBody: document.getElementById('tableBody'),
+    totalProductsCard: document.getElementById('totalProductsCard'),
+    totalStockCard: document.getElementById('totalStockCard'),
+    highStockCard: document.getElementById('highStockCard'),
+    pendingOrdersCard: document.getElementById('pendingOrdersCard'),
+};
+
+// --- CONFIGURATION ---
+const skuMappings = {
+    '5012583105084': '5012583105220',
+    '3099799632398': '309979632398'
+};
+
+// --- CORE LOGIC ---
+function parseFile(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = e => {
+            try {
+                const workbook = XLSX.read(e.target.result, { type: 'array' });
+                const jsonData = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
+                resolve(jsonData);
+            } catch (err) {
+                reject(new Error("Failed to parse the file."));
+            }
+        };
+        reader.onerror = () => reject(new Error("Failed to read the file."));
+        reader.readAsArrayBuffer(file);
+    });
+}
+
+function mergeAndCleanData(psmData, nukData, ukPriceDataRaw, intlPriceDataRaw) {
+    const findKey = (obj, key) => obj ? Object.keys(obj).find(k => k.toLowerCase().trim() === key.toLowerCase().trim()) : undefined;
+    const findVal = (row, key) => row && key ? row[findKey(row, key)] : undefined;
+    
+    const createPriceMap = (data, eanKeyName) => {
+        const map = new Map();
+        if (!data || !data.length) return map;
+        const eanKey = findKey(data[0], eanKeyName);
+        if (!eanKey) {
+            console.warn(`Could not find a column matching '${eanKeyName}' in a price file.`);
+            return map;
+        }
+        data.forEach(row => {
+            const originalEan = String(row[eanKey] || '').trim();
+            if (originalEan) {
+                const normalizedEan = originalEan.replace(/^0+/, '');
+                map.set(normalizedEan, row);
+            }
+        });
+        return map;
+    };
+    
+    state.ukPriceData = createPriceMap(ukPriceDataRaw, 'EAN');
+    state.intlPriceData = createPriceMap(intlPriceDataRaw, 'EAN');
+
+    const mergedMap = new Map();
+
+    (psmData || []).forEach(row => {
+        let originalSku = String(findVal(row, 'sku') || '').trim();
+        if (!originalSku) return;
+        if (skuMappings[originalSku]) originalSku = skuMappings[originalSku];
+        
+        const normalizedSku = originalSku.replace(/^0+/, '');
+        if (!normalizedSku) return;
+
+        mergedMap.set(normalizedSku, {
+            SKU: originalSku,
+            'Product Name': findVal(row, 'Product Name') || '',
+            'PSM_Stock': parseFloat(findVal(row, 'Stocks')) || 0,
+            'NUK_Stock': 0,
+            'PSM_Pending': parseFloat(findVal(row, 'Pending Sales Orders')) || 0,
+            'NUK_Pending': 0,
+            'PSM_Incoming': parseFloat(findVal(row, 'Incoming Stocks')) || 0,
+            'NUK_Incoming': 0,
+            'PSM_Required': parseFloat(findVal(row, 'Required Stocks')) || 0,
+            'NUK_Required': 0,
+            'PSM_Price': findVal(row, 'Last Purchase Price')
+        });
+    });
+    
+    (nukData || []).forEach(row => {
+        let originalSku = String(findVal(row, 'sku') || '').trim();
+        if (!originalSku) return;
+        if (skuMappings[originalSku]) originalSku = skuMappings[originalSku];
+
+        const normalizedSku = originalSku.replace(/^0+/, '');
+        if (!normalizedSku) return;
+        
+        const entry = mergedMap.get(normalizedSku) || { 
+            SKU: originalSku, 
+            'Product Name': findVal(row, 'Product Name') || '' 
+        };
+
+        if (!entry['Product Name'] && findVal(row, 'Product Name')) {
+            entry['Product Name'] = findVal(row, 'Product Name');
+        }
+        entry['NUK_Stock'] = (entry['NUK_Stock'] || 0) + (parseFloat(findVal(row, 'Stocks')) || 0);
+        entry['NUK_Pending'] = (entry['NUK_Pending'] || 0) + (parseFloat(findVal(row, 'Pending Sales Orders')) || 0);
+        entry['NUK_Incoming'] = (entry['NUK_Incoming'] || 0) + (parseFloat(findVal(row, 'Incoming Stocks')) || 0);
+        entry['NUK_Required'] = (entry['NUK_Required'] || 0) + (parseFloat(findVal(row, 'Required Stocks')) || 0);
+        entry['NUK_Price'] = findVal(row, 'Last Purchase Price');
+        mergedMap.set(normalizedSku, entry);
+    });
+
+    const finalData = [];
+    mergedMap.forEach((row, normalizedSku) => {
+        const ukPriceInfo = state.ukPriceData.get(normalizedSku);
+        const intlPriceInfo = state.intlPriceData.get(normalizedSku);
+
+        row['UK_Price'] = ukPriceInfo ? findVal(ukPriceInfo, 'price') : '';
+        row['International_Price'] = intlPriceInfo ? findVal(intlPriceInfo, 'price') : '';
+        row['Brand'] = ukPriceInfo ? findVal(ukPriceInfo, 'Brand') : '';
+        row['Category'] = ukPriceInfo ? findVal(ukPriceInfo, 'Category') : '';
+        row['UK_Product_Name'] = ukPriceInfo ? findVal(ukPriceInfo, 'Name') : '';
+
+        row['Total Stock'] = (row['PSM_Stock'] || 0) + (row['NUK_Stock'] || 0);
+        row['Total Pending'] = (row['PSM_Pending'] || 0) + (row['NUK_Pending'] || 0);
+        row['Total Incoming'] = (row['PSM_Incoming'] || 0) + (row['NUK_Incoming'] || 0);
+        row['Total Required'] = (row['PSM_Required'] || 0) + (row['NUK_Required'] || 0);
+        row['Final Stock'] = row['Total Stock'] - row['Total Pending'];
+
+        if (row['Total Stock'] !== 0 || row['Total Pending'] !== 0 || row['Total Incoming'] !== 0 || row['Total Required'] !== 0) {
+            finalData.push(row);
+        }
+    });
+    return finalData;
+}
+
+
+// --- UI RENDERING ---
+function renderTable() {
+    const data = state.currentlyDisplayedData;
+    elements.tableHeader.innerHTML = '';
+    elements.tableBody.innerHTML = '';
+
+    if (data.length === 0) {
+        elements.tableBody.innerHTML = `<tr><td colspan="100" class="text-center py-12 text-slate-500">No data to display.</td></tr>`;
+        return;
+    }
+
+    const headers = ['SKU', 'Product Name', 'PSM_Stock', 'NUK_Stock', 'Total Stock', 'Total Pending', 'Final Stock'];
+    if (state.ukPriceFile) headers.push('UK_Price');
+    if (state.intlPriceFile) headers.push('International_Price');
+    
+    const headerRow = document.createElement('tr');
+    headers.forEach(h => {
+        const th = document.createElement('th');
+        th.className = 'py-3 px-4 text-left font-semibold bg-blue-200';
+        if (['Final Stock', 'Total Stock'].includes(h)) th.classList.add('font-bold');
+        th.textContent = h.replace(/_/g, ' ');
+        headerRow.appendChild(th);
+    });
+    elements.tableHeader.appendChild(headerRow);
+    
+    const fragment = document.createDocumentFragment();
+    data.forEach(row => {
+        const tr = document.createElement('tr');
+        tr.className = 'hover:bg-blue-50/50';
+        headers.forEach(header => {
+            const td = document.createElement('td');
+            td.className = 'py-2 px-4 whitespace-nowrap border-b border-slate-200';
+            const value = row[header];
+
+            if (header === 'UK_Price' || header === 'International_Price') {
+                const price = parseFloat(value);
+                td.textContent = !isNaN(price) ? `£${price.toFixed(2)}` : '';
+            } else {
+                td.textContent = value ?? 0;
+            }
+
+            if (header === 'Final Stock') {
+                td.className += ' font-bold';
+                const stockValue = parseFloat(value) || 0;
+                if (stockValue < 0) {
+                    td.classList.add('text-red-600');
+                } else if (stockValue >= 20) {
+                    td.classList.add('text-green-600');
+                } else {
+                    td.classList.add('text-amber-600');
+                }
+            }
+             if (header === 'Product Name') {
+                td.classList.remove('whitespace-nowrap');
+                td.classList.add('w-full');
+            }
+            tr.appendChild(td);
+        });
+        fragment.appendChild(tr);
+    });
+    elements.tableBody.appendChild(fragment);
+}
+
+function updateSummaryCards() {
+    const data = state.fullMergedData;
+    elements.totalProductsCard.textContent = data.length.toLocaleString();
+    elements.totalStockCard.textContent = data.reduce((sum, p) => sum + (p['Total Stock'] || 0), 0).toLocaleString();
+    elements.highStockCard.textContent = data.filter(p => (p['Final Stock'] || 0) >= 20).length.toLocaleString();
+    elements.pendingOrdersCard.textContent = data.reduce((sum, p) => sum + (p['Total Pending'] || 0), 0).toLocaleString();
+}
+
+function applyFiltersAndRender() {
+    let data = [...state.fullMergedData];
+    if (elements.gslToggle.checked) data = data.filter(r => !String(r['Product Name'] || '').toLowerCase().includes('gsl'));
+    if (state.stockFilterThreshold > 0) {
+        data = data.filter(r => (r['Final Stock'] || 0) >= state.stockFilterThreshold);
+    }
+    const searchTerm = elements.searchInput.value.toLowerCase().trim();
+    if (searchTerm) data = data.filter(r => String(r.SKU || '').toLowerCase().includes(searchTerm) || String(r['Product Name'] || '').toLowerCase().includes(searchTerm));
+    state.currentlyDisplayedData = data;
+    renderTable();
+}
+
+function updateFileInputUI(type, file) {
+    const nameEl = elements[`${type}FileName`];
+    const uploadIcon = document.getElementById(`${type}FileIconUpload`);
+    const fileIcon = document.getElementById(`${type}FileIconFile`);
+    
+    if (file) {
+        nameEl.textContent = file.name;
+        nameEl.classList.remove('text-slate-700');
+        nameEl.classList.add('text-blue-600');
+        uploadIcon.classList.add('hidden');
+        fileIcon.classList.remove('hidden');
+    } else {
+        nameEl.textContent = 'Choose file...';
+        nameEl.classList.add('text-slate-700');
+        nameEl.classList.remove('text-blue-600');
+        uploadIcon.classList.remove('hidden');
+        fileIcon.classList.add('hidden');
+    }
+}
+
+function getFormattedTimestamp() {
+    const now = new Date();
+    const day = String(now.getDate()).padStart(2, '0');
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const year = now.getFullYear();
+    const hours = String(now.getHours()).padStart(2, '0');
+    const minutes = String(now.getMinutes()).padStart(2, '0');
+    return `${day}-${month}-${year}-${hours}-${minutes}`;
+}
+
+// --- EVENT HANDLERS ---
+async function handleMergeClick() {
+    if (!state.psmFile || !state.nukFile) {
+        alert('Please provide both a PSM and a NUK file.');
+        return;
+    }
+
+    elements.mergeButton.textContent = 'Processing...';
+    elements.mergeButton.disabled = true;
+
+    try {
+        const filePromises = [parseFile(state.psmFile), parseFile(state.nukFile)];
+        if (state.ukPriceFile) filePromises.push(parseFile(state.ukPriceFile));
+        if (state.intlPriceFile) filePromises.push(parseFile(state.intlPriceFile));
+        
+        const [psmData, nukData, ukPriceData = [], intlPriceData = []] = await Promise.all(filePromises);
+        
+        state.fullMergedData = mergeAndCleanData(psmData, nukData, ukPriceData, intlPriceData);
+        state.currentlyDisplayedData = state.fullMergedData;
+        
+        elements.welcomeScreen.classList.add('hidden');
+        elements.dataScreen.classList.remove('hidden');
+
+        updateSummaryCards();
+        renderTable();
+        toggleFilterControls(false);
+
+    } catch (error) {
+        alert(`Error: ${error.message}`);
+    } finally {
+        elements.mergeButton.textContent = 'Merge & Process';
+        elements.mergeButton.disabled = false;
+    }
+}
+
+function handleFileSelect(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const fileType = e.target.id.replace('File', ''); // psm, nuk, ukPrice, intlPrice
+    state[`${fileType}File`] = file;
+    updateFileInputUI(fileType, file);
+}
+
+function handleFileDrop(e) {
+    e.preventDefault();
+    const file = e.dataTransfer.files[0];
+    if (!file) return;
+
+    const dropZone = e.target.closest('.file-drop-zone');
+    const forAttr = dropZone.getAttribute('for');
+    const fileType = forAttr.replace('File', '');
+    
+    state[`${fileType}File`] = file;
+    elements[`${fileType}FileInput`].files = e.dataTransfer.files;
+    updateFileInputUI(fileType, file);
+}
+
+function generateExportFile(dataToExport, reportType) {
+    if(dataToExport.length === 0) {
+        alert('No data to export.');
+        return;
+    }
+    
+    const timestamp = getFormattedTimestamp();
+    let finalDataToExport = [...dataToExport];
+    let fileName = '';
+
+    if (reportType === 'full') {
+        fileName = `Merge-File-PSM-NUK-${timestamp}.xlsx`;
+    } else if (reportType === 'gte20') {
+        fileName = `FloorStock=>20-PSM-NUK-${timestamp}.xlsx`;
+        finalDataToExport = finalDataToExport.filter(row => {
+            const finalStock = row['Final Stock'] || 0;
+            const hasGsl = String(row['Product Name'] || '').toLowerCase().includes('gsl');
+            return finalStock >= 20 && !hasGsl;
+        });
+
+        if (finalDataToExport.length === 0) {
+            alert('No products with stock >= 20 (excluding GSL) to export.');
+            return;
+        }
+    } else if (reportType === 'gte10') {
+        fileName = `FloorStock=>10-PSM-NUK-${timestamp}.xlsx`;
+        finalDataToExport = finalDataToExport.filter(row => {
+            const finalStock = row['Final Stock'] || 0;
+            const hasGsl = String(row['Product Name'] || '').toLowerCase().includes('gsl');
+            return finalStock >= 10 && !hasGsl;
+        });
+
+        if (finalDataToExport.length === 0) {
+            alert('No products with stock >= 10 (excluding GSL) to export.');
+            return;
+        }
+    } else {
+        return; // Should not happen
+    }
+    
+    const columnMapping = {
+        'SKU': 'SKU',
+        'Product Name': 'Product Name',
+        'PSM Purchase Price': 'PSM_Price',
+        'NUK Purchase Price': 'NUK_Price',
+        'PSM Stocks': 'PSM_Stock',
+        'NUK Stocks': 'NUK_Stock',
+        'Total Stocks': 'Total Stock',
+        'PSM Pending Sales Orders': 'PSM_Pending',
+        'NUK Pending Sales Orders': 'NUK_Pending',
+        'Total Pending Sales Orders': 'Total Pending',
+        'PSM Required Stocks': 'PSM_Required',
+        'NUK Required Stocks': 'NUK_Required',
+        'Total Required Stocks': 'Total Required',
+        'PSM Incoming Stocks': 'PSM_Incoming',
+        'NUK Incoming Stocks': 'NUK_Incoming',
+        'Total Incoming Stocks': 'Total Incoming',
+        'Final Stock': 'Final Stock'
+    };
+
+    const finalColumnHeaders = Object.keys(columnMapping);
+    
+    const reorderedData = finalDataToExport.map(row => {
+        const newRow = {};
+        finalColumnHeaders.forEach(header => {
+            const dataKey = columnMapping[header];
+            newRow[header] = row[dataKey] ?? '';
+        });
+        return newRow;
+    });
+
+    const worksheet = XLSX.utils.json_to_sheet(reorderedData);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Merged Data");
+    XLSX.writeFile(workbook, fileName);
+}
+
+function generateFloorstockReport() {
+    const data = state.fullMergedData;
+    if (data.length === 0) {
+        alert('No data available to generate a report.');
+        return;
+    }
+
+    const filteredData = data.filter(row => {
+        const finalStock = row['Final Stock'] || 0;
+        const productName = String(row['Product Name'] || '').toLowerCase();
+        const ukProductName = String(row['UK_Product_Name'] || '').toLowerCase();
+        const hasGsl = productName.includes('gsl') || ukProductName.includes('gsl');
+        return finalStock >= 20 && !hasGsl;
+    });
+
+    if (filteredData.length === 0) {
+        alert('No products meet the Floorstock report criteria (Stock >= 20 and not GSL).');
+        return;
+    }
+
+    const exportData = filteredData.map(row => {
+        const formatPrice = (price) => {
+            const num = parseFloat(price);
+            return !isNaN(num) ? `£${num.toFixed(2)}` : '';
+        };
+        return {
+            'EAN': row.SKU,
+            'NAME': row['UK_Product_Name'] || row['Product Name'],
+            'BRAND': row['Brand'] || '',
+            'CATEGORY': row['Category'] || '',
+            'UK PRICE': formatPrice(row['UK_Price']),
+            'INTERNATIONAL PRICE': formatPrice(row['International_Price']),
+            'FINAL STOCK': row['Final Stock'] || 0
+        };
+    });
+
+    const timestamp = getFormattedTimestamp();
+    const fileName = `Floorstock-Report-${timestamp}.xlsx`;
+    const worksheet = XLSX.utils.json_to_sheet(exportData);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Floorstock Data");
+    XLSX.writeFile(workbook, fileName);
+}
+
+function toggleFilterControls(disabled) {
+    elements.searchInput.disabled = disabled;
+    elements.gslToggle.disabled = disabled;
+    elements.filterStockButton10.disabled = disabled;
+    elements.filterStockButton20.disabled = disabled;
+    elements.showAllButton.disabled = disabled;
+    elements.exportButton.disabled = disabled;
+    elements.exportViewButton10.disabled = disabled;
+    elements.exportViewButton20.disabled = disabled;
+
+    // Special handling for the new floorstock button
+    const canExportFloorstock = !disabled && (state.ukPriceFile || state.intlPriceFile);
+    elements.exportFloorstockButton.disabled = !canExportFloorstock;
+}
+
+// --- INITIALIZATION ---
+function initializeApp() {
+    elements.psmFileInput.addEventListener('change', handleFileSelect);
+    elements.nukFileInput.addEventListener('change', handleFileSelect);
+    elements.ukPriceFileInput.addEventListener('change', handleFileSelect);
+    elements.intlPriceFileInput.addEventListener('change', handleFileSelect);
+    
+    const dropZones = document.querySelectorAll('.file-drop-zone');
+    dropZones.forEach(zone => {
+        zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('drag-over'); });
+        zone.addEventListener('dragleave', e => { e.preventDefault(); zone.classList.remove('drag-over'); });
+        zone.addEventListener('drop', e => { zone.classList.remove('drag-over'); handleFileDrop(e); });
+    });
+
+    elements.mergeButton.addEventListener('click', handleMergeClick);
+    elements.exportButton.addEventListener('click', () => generateExportFile(state.fullMergedData, 'full'));
+    elements.exportViewButton10.addEventListener('click', () => generateExportFile(state.fullMergedData, 'gte10'));
+    elements.exportViewButton20.addEventListener('click', () => generateExportFile(state.fullMergedData, 'gte20'));
+    elements.exportFloorstockButton.addEventListener('click', generateFloorstockReport);
+    
+    elements.searchInput.addEventListener('input', applyFiltersAndRender);
+    elements.gslToggle.addEventListener('change', applyFiltersAndRender);
+
+    elements.filterStockButton10.addEventListener('click', () => { state.stockFilterThreshold = 10; applyFiltersAndRender(); });
+    elements.filterStockButton20.addEventListener('click', () => { state.stockFilterThreshold = 20; applyFiltersAndRender(); });
+    
+    elements.showAllButton.addEventListener('click', () => {
+        state.stockFilterThreshold = 0;
+        elements.searchInput.value = '';
+        elements.gslToggle.checked = false;
+        applyFiltersAndRender();
+    });
+    
+    elements.menuButton.addEventListener('click', () => elements.sidebar.classList.toggle('open'));
+}
+
+initializeApp();
+});
+</script>
+</body>
+</html>
+
+
+

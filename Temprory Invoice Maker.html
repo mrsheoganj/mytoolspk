@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Invoice Generator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .invoice-container {
+            box-shadow: 0 0 15px rgba(0,0,0,0.1);
+        }
+        [contenteditable="true"]:focus {
+            outline: 2px solid #3b82f6;
+            background-color: #eff6ff;
+        }
+        .item-row:hover .delete-btn {
+            opacity: 1;
+        }
+        .delete-btn {
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+        @media print {
+            body * {
+                visibility: hidden;
+            }
+            .invoice-container, .invoice-container * {
+                visibility: visible;
+            }
+            .invoice-container {
+                position: absolute;
+                left: 0;
+                top: 0;
+                width: 100%;
+            }
+            .no-print {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-100 p-4 sm:p-8">
+
+    <!-- Controls -->
+    <div class="max-w-4xl mx-auto mb-6 bg-white p-4 rounded-lg shadow-md flex flex-wrap gap-2 justify-center no-print">
+        <button onclick="setInvoiceType('Proforma Invoice')" class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition">Proforma Invoice</button>
+        <button onclick="setInvoiceType('Invoice')" class="bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600 transition">Final Invoice</button>
+        <button onclick="setInvoiceType('Deposit Proforma')" class="bg-yellow-500 text-white px-4 py-2 rounded-lg hover:bg-yellow-600 transition">Deposit Proforma</button>
+        <button onclick="window.print()" class="bg-gray-500 text-white px-4 py-2 rounded-lg hover:bg-gray-600 transition">Print</button>
+        <button onclick="exportToPDF()" class="bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 transition">Export to PDF</button>
+        <button onclick="exportToXLSX()" class="bg-teal-500 text-white px-4 py-2 rounded-lg hover:bg-teal-600 transition">Export to XLSX</button>
+    </div>
+
+    <!-- Invoice -->
+    <div id="invoice" class="invoice-container max-w-4xl mx-auto bg-white p-8 sm:p-12 rounded-lg">
+        
+        <!-- Header -->
+        <header class="flex justify-between items-start pb-8 border-b">
+            <div class="flex items-start">
+                <img src="https://psmvision.com/ams/public//assets/img/logo.png" alt="PSM Vision Logo" class="h-16 mr-4">
+                <div>
+                    <div contenteditable="true" class="text-2xl font-bold text-gray-800">PSM VISION LIMITED</div>
+                    <div contenteditable="true" class="text-sm text-gray-600 mt-2">
+                        Unit 7 The Wenta Business Centre, 1 Electric Avenue,<br>
+                        Enfield, Middlesex, England, EN3 7XU.
+                    </div>
+                    <div contenteditable="true" class="text-sm text-gray-600 mt-2">
+                        <strong>VAT No:</strong> 319389959<br>
+                        <strong>Company Reg no:</strong> 11807204
+                    </div>
+                </div>
+            </div>
+            <div class="w-1/2 text-right">
+                <h1 id="invoice-title" class="text-4xl font-bold text-gray-800 uppercase">Proforma Invoice</h1>
+                <div class="mt-4 text-sm text-gray-600">
+                    <p><strong>Date:</strong> <span contenteditable="true">22/09/2025</span></p>
+                    <p><strong>No:</strong> <span contenteditable="true" id="invoice-no">PSM-SO-22092514211</span></p>
+                    <p><strong>Ref. No:</strong> <span contenteditable="true">220925-003</span></p>
+                </div>
+                 <div contenteditable="true" class="text-sm text-gray-600 mt-4">
+                    <strong>Email:</strong> info@psmvision.co.uk<br>
+                    <strong>Phone:</strong> +44 (0) 20 3930 0575<br>
+                    <strong>Website:</strong> www.psmvision.co.uk
+                </div>
+            </div>
+        </header>
+
+        <!-- Billing Info -->
+        <section class="mt-8 flex justify-between items-start">
+            <div class="w-1/2">
+                <h2 class="text-sm font-semibold text-gray-500">To,</h2>
+                <div contenteditable="true" class="text-gray-800 font-bold mt-1">Narayanswarup (UK) Limited</div>
+                <div contenteditable="true" class="text-gray-600 text-sm">
+                    55 Bourne View, Greenford<br>
+                    UB6 7QS
+                </div>
+                <div contenteditable="true" class="text-gray-600 text-sm mt-1">
+                    <strong>VAT:</strong> 348562473
+                </div>
+            </div>
+            <div class="w-1/2">
+                <h2 class="text-sm font-semibold text-gray-500">Delivery To:</h2>
+                <div contenteditable="true" class="text-gray-600 text-sm mt-1">
+                    55 Bourne View, Greenford<br>
+                    UB6 7QS
+                </div>
+            </div>
+        </section>
+
+        <!-- Items Table -->
+        <section class="mt-10">
+            <table class="w-full text-left">
+                <thead>
+                    <tr class="bg-gray-100 text-sm text-gray-600">
+                        <th class="p-2 rounded-l-lg w-1/12 font-semibold">QUANTITY</th>
+                        <th class="p-2 w-6/12 font-semibold">DESCRIPTION</th>
+                        <th class="p-2 w-1/12 font-semibold">PRICE</th>
+                        <th class="p-2 w-1/12 font-semibold">VAT</th>
+                        <th class="p-2 rounded-r-lg w-2/12 text-right font-semibold">AMOUNT</th>
+                    </tr>
+                </thead>
+                <tbody id="items-table">
+                    <!-- Sample Item Rows -->
+                     <tr class="item-row border-b">
+                        <td class="p-2 align-top"><div contenteditable="true" class="qty">60</div></td>
+                        <td class="p-2 align-top"><div contenteditable="true">L'Oreal Paris Color Riche Intense Volume Matte Lipstick, 480 Plum Dominant<br><small>EAN Code: 30145429</small></div></td>
+                        <td class="p-2 align-top"><div contenteditable="true" class="price">4.28</div></td>
+                        <td class="p-2 align-top"><div contenteditable="true" class="vat">20%</div></td>
+                        <td class="p-2 align-top text-right amount">£256.80</td>
+                        <td class="p-2 align-top text-center"><button class="delete-btn text-red-500 no-print" onclick="deleteRow(this)">✖</button></td>
+                    </tr>
+                     <tr class="item-row border-b">
+                        <td class="p-2 align-top"><div contenteditable="true" class="qty">300</div></td>
+                        <td class="p-2 align-top"><div contenteditable="true">Revlon Super Lustrous Lipstick, 477 Black Cherry<br><small>EAN Code: 309979632398</small></div></td>
+                        <td class="p-2 align-top"><div contenteditable="true" class="price">1.67</div></td>
+                        <td class="p-2 align-top"><div contenteditable="true" class="vat">20%</div></td>
+                        <td class="p-2 align-top text-right amount">£501.00</td>
+                        <td class="p-2 align-top text-center"><button class="delete-btn text-red-500 no-print" onclick="deleteRow(this)">✖</button></td>
+                    </tr>
+                </tbody>
+            </table>
+            <button id="add-item-btn" class="mt-4 bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition no-print">+ Add Item</button>
+        </section>
+        
+        <!-- Totals -->
+        <section class="mt-8 flex justify-end">
+            <div class="w-full sm:w-1/2 md:w-1/3">
+                <div class="flex justify-between py-2 border-b">
+                    <span class="text-gray-600">Total Excl. Vat</span>
+                    <span id="subtotal" class="font-bold text-gray-800">£0.00</span>
+                </div>
+                <div class="flex justify-between py-2 border-b">
+                    <span class="text-gray-600">Total Vat</span>
+                    <span id="total-vat" class="font-bold text-gray-800">£0.00</span>
+                </div>
+                <div class="flex justify-between py-3 bg-gray-100 px-2 rounded-lg mt-2">
+                    <span class="font-bold text-gray-800">Total Incl. Vat</span>
+                    <span id="grand-total" class="font-bold text-xl text-gray-900">£0.00</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- Footer -->
+        <footer class="mt-12 pt-8 border-t text-sm text-gray-600">
+            <div>
+                <h3 class="font-semibold text-gray-700 mb-2">Note:</h3>
+                <div contenteditable="true">
+                    <ol class="list-decimal list-inside">
+                        <li>Complaints regarding delivery must be reported within three days of the delivery date.</li>
+                        <li>Terms of Delivery: Ex-works.</li>
+                        <li>Title of any goods will not pass until the invoice is paid in full.</li>
+                        <li>All goods are sold subject to our terms & Conditions.</li>
+                        <li>The exporters of the products covered by this document declare that, except where otherwise stated, these products are of UK preferential origin. EORI Number: GB319389959000</li>
+                    </ol>
+                </div>
+            </div>
+            <div class="mt-6">
+                 <h3 class="font-semibold text-gray-700 mb-2">GBP Bank Detail:</h3>
+                 <div contenteditable="true">
+                    <strong>PSM VISION LIMITED</strong><br>
+                    <strong>Bank Name:</strong> Santander<br>
+                    <strong>Account No.:</strong> 37929365<br>
+                    <strong>Sort Code:</strong> 09-01-29<br>
+                    <strong>Swift/BIC Code:</strong> ABBYGB2LXXX<br>
+                    <strong>IBAN:</strong> GB02ABBY09012937929365
+                </div>
+            </div>
+        </footer>
+
+    </div>
+
+    <script>
+        const itemsTable = document.getElementById('items-table');
+        const addItemBtn = document.getElementById('add-item-btn');
+
+        const currencyFormatter = new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' });
+
+        function updateTotals() {
+            let subtotal = 0;
+            let totalVat = 0;
+
+            itemsTable.querySelectorAll('.item-row').forEach(row => {
+                const qtyEl = row.querySelector('.qty');
+                const priceEl = row.querySelector('.price');
+                const vatEl = row.querySelector('.vat');
+                const amountEl = row.querySelector('.amount');
+
+                const qty = parseFloat(qtyEl.innerText) || 0;
+                const price = parseFloat(priceEl.innerText) || 0;
+                const vatRate = parseFloat(vatEl.innerText.replace('%', '')) / 100 || 0;
+
+                const amount = qty * price;
+                const itemVat = amount * vatRate;
+
+                subtotal += amount;
+                totalVat += itemVat;
+
+                amountEl.innerText = currencyFormatter.format(amount);
+            });
+
+            const grandTotal = subtotal + totalVat;
+            
+            document.getElementById('subtotal').innerText = currencyFormatter.format(subtotal);
+            document.getElementById('total-vat').innerText = currencyFormatter.format(totalVat);
+            document.getElementById('grand-total').innerText = currencyFormatter.format(grandTotal);
+        }
+
+        function createNewRow() {
+            const newRow = document.createElement('tr');
+            newRow.classList.add('item-row', 'border-b');
+            newRow.innerHTML = `
+                <td class="p-2 align-top"><div contenteditable="true" class="qty">1</div></td>
+                <td class="p-2 align-top"><div contenteditable="true">New Product<br><small>EAN Code:</small></div></td>
+                <td class="p-2 align-top"><div contenteditable="true" class="price">0.00</div></td>
+                <td class="p-2 align-top"><div contenteditable="true" class="vat">20%</div></td>
+                <td class="p-2 align-top text-right amount">£0.00</td>
+                <td class="p-2 align-top text-center"><button class="delete-btn text-red-500 no-print" onclick="deleteRow(this)">✖</button></td>
+            `;
+            itemsTable.appendChild(newRow);
+        }
+
+        function deleteRow(button) {
+            button.closest('.item-row').remove();
+            updateTotals();
+        }
+
+        function setInvoiceType(type) {
+            document.getElementById('invoice-title').innerText = type;
+        }
+
+        async function exportToPDF() {
+            const invoiceElement = document.getElementById('invoice');
+            const invoiceNo = document.getElementById('invoice-no').innerText;
+            
+            // Temporarily hide buttons to not include them in the PDF
+            const buttons = invoiceElement.querySelectorAll('.no-print');
+            buttons.forEach(btn => btn.style.display = 'none');
+            
+            await html2canvas(invoiceElement, {
+                scale: 2, // Higher scale for better quality
+                useCORS: true
+            }).then(canvas => {
+                const imgData = canvas.toDataURL('image/png');
+                const pdf = new jspdf.jsPDF({
+                    orientation: 'portrait',
+                    unit: 'pt',
+                    format: 'a4'
+                });
+                
+                const pdfWidth = pdf.internal.pageSize.getWidth();
+                const pdfHeight = pdf.internal.pageSize.getHeight();
+                const canvasWidth = canvas.width;
+                const canvasHeight = canvas.height;
+                const ratio = canvasHeight / canvasWidth;
+                const imgHeight = pdfWidth * ratio;
+                let heightLeft = imgHeight;
+                let position = 0;
+
+                pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
+                heightLeft -= pdfHeight;
+
+                while (heightLeft >= 0) {
+                    position = heightLeft - imgHeight;
+                    pdf.addPage();
+                    pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
+                    heightLeft -= pdfHeight;
+                }
+                
+                pdf.save(`Invoice-${invoiceNo}.pdf`);
+            });
+
+            // Show buttons again
+            buttons.forEach(btn => btn.style.display = '');
+        }
+        
+        function exportToXLSX() {
+            const invoiceNo = document.getElementById('invoice-no').innerText;
+            const data = [];
+            
+            const headers = ['QUANTITY', 'DESCRIPTION', 'PRICE', 'VAT', 'AMOUNT'];
+            data.push(headers);
+
+            document.querySelectorAll('#items-table .item-row').forEach(row => {
+                const rowData = [];
+                rowData.push(row.querySelector('.qty').innerText);
+                const descriptionDiv = row.querySelector('td:nth-child(2) div');
+                const descriptionText = (descriptionDiv.innerText || descriptionDiv.textContent).replace(/\s+/g, ' ').trim();
+                rowData.push(descriptionText);
+                rowData.push(parseFloat(row.querySelector('.price').innerText) || 0);
+                rowData.push(row.querySelector('.vat').innerText);
+                rowData.push(parseFloat(row.querySelector('.amount').innerText.replace(/[^0-9.-]+/g,"")) || 0);
+                data.push(rowData);
+            });
+
+            data.push([]);
+
+            data.push(['', '', '', 'Total Excl. Vat', parseFloat(document.getElementById('subtotal').innerText.replace(/[^0-9.-]+/g,"")) || 0]);
+            data.push(['', '', '', 'Total Vat', parseFloat(document.getElementById('total-vat').innerText.replace(/[^0-9.-]+/g,"")) || 0]);
+            data.push(['', '', '', 'Total Incl. Vat', parseFloat(document.getElementById('grand-total').innerText.replace(/[^0-9.-]+/g,"")) || 0]);
+
+            const ws = XLSX.utils.aoa_to_sheet(data);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, 'InvoiceData');
+
+            XLSX.writeFile(wb, `Invoice-Data-${invoiceNo}.xlsx`);
+        }
+
+        // Event Listeners
+        addItemBtn.addEventListener('click', createNewRow);
+
+        itemsTable.addEventListener('input', (e) => {
+            if (e.target.classList.contains('qty') || e.target.classList.contains('price') || e.target.classList.contains('vat')) {
+                updateTotals();
+            }
+        });
+
+        // Initial calculation on load
+        document.addEventListener('DOMContentLoaded', updateTotals);
+    </script>
+
+</body>
+</html>
+

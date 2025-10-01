@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PSM Tools Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            background-color: #f0f2f5; /* Light background for the dashboard */
+            color: #333; /* Dark text for the dashboard */
+        }
+        /* Glass container for dashboard elements (light theme) */
+        .glass-container.dashboard-card {
+            background: rgba(255, 255, 255, 0.7); /* Lighter glass effect */
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(220, 220, 220, 0.5);
+            border-radius: 12px;
+            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.05);
+            color: #333; /* Ensure text inside cards is dark */
+        }
+        /* Specific overrides for dashboard card text */
+        .glass-container.dashboard-card h3 {
+            color: #0b0c10; /* Darker title for cards */
+        }
+        .glass-container.dashboard-card p {
+            color: #666; /* Medium gray for card description */
+        }
+
+        /* Password Overlay (dark and futuristic) */
+        .password-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: #0b0c10; /* Dark background for login */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+        .login-glass-container {
+            background: rgba(18, 19, 25, 0.7); /* Darker glass effect for login */
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(40, 42, 54, 0.5);
+            border-radius: 12px;
+            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.2);
+            position: relative;
+            overflow: hidden;
+        }
+        .dashboard-container.hidden {
+            display: none;
+        }
+        /* Gradient for buttons and highlights */
+        .btn-gradient {
+            background: linear-gradient(90deg, #6c5ce7, #a29bfe); /* Purple gradient */
+            transition: all 0.3s ease;
+        }
+        .btn-gradient:hover {
+            opacity: 0.9;
+            box-shadow: 0 0 15px rgba(108, 92, 231, 0.6);
+        }
+        .input-glow:focus {
+            border-color: #6c5ce7;
+            box-shadow: 0 0 0 3px rgba(108, 92, 231, 0.5);
+        }
+        .header-glow {
+            border-image: linear-gradient(to right, #6c5ce7, #a29bfe, transparent) 1;
+            border-bottom: 2px solid;
+            background-color: #ffffff; /* Light header background */
+        }
+        .card-glow:hover {
+            border-color: #a29bfe;
+            box-shadow: 0 0 20px rgba(162, 155, 254, 0.2);
+            transform: translateY(-3px);
+        }
+        .tool-icon {
+            color: #6c5ce7; /* Default icon color for light theme */
+        }
+        /* Specific icon colors (adjusted for light theme visibility) */
+        .tool-icon-blue { color: #00bcd4; } /* Cyan */
+        .tool-icon-emerald { color: #2ecc71; } /* Emerald Green */
+        .tool-icon-purple { color: #9b59b6; } /* Amethyst */
+        .tool-icon-red { color: #e74c3c; } /* Alizarin Red */
+        .tool-icon-orange { color: #f39c12; } /* Sun Flower Orange */
+
+        /* Login Logo Invert */
+        .login-logo-invert {
+            filter: brightness(150%) saturate(150%) hue-rotate(180deg) invert(100%); /* Adjusted invert for better dark bg contrast */
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col">
+
+    <div id="passwordOverlay" class="password-overlay">
+        <div class="login-glass-container p-8 rounded-xl max-w-sm w-full text-center relative">
+            <div class="absolute inset-0 rounded-xl" style="
+                box-shadow: 0 0 25px rgba(108, 92, 231, 0.7),
+                            0 0 50px rgba(162, 155, 254, 0.4);
+                opacity: 0.4;
+                pointer-events: none;
+            "></div>
+
+            <img src="https://psmvision.com/ams/public//assets/img/logo.png" alt="PSM Vision Logo" class="h-14 mx-auto mb-6 login-logo-invert">
+            <h2 class="text-3xl font-extrabold text-white mb-4">SOFTWARE SUITE</h2>
+            <p class="text-slate-400 mb-6 text-sm">Unified Access & Management</p>
+
+            <input type="password" id="dashboardPassword" 
+                   class="w-full px-5 py-3 border border-slate-600 bg-slate-800 rounded-lg text-white placeholder-slate-500 focus:outline-none input-glow transition mb-4" 
+                   placeholder="PASSWORD">
+            
+            <button id="loginButton" class="w-full btn-gradient text-white font-bold py-3 rounded-lg text-lg tracking-wide hover:shadow-lg transition">LOGIN</button>
+            <p id="errorMessage" class="text-red-400 text-sm mt-4 hidden">Incorrect password. Please try again.</p>
+
+            <div class="text-center text-sm mt-8 text-slate-500">
+                <p>Developed By Prashant Kumar</p>
+            </div>
+        </div>
+    </div>
+
+    <div id="dashboardContent" class="dashboard-container hidden flex-1 flex flex-col">
+        <header class="glass-container dashboard-card p-4 border-b header-glow sticky top-0 z-10 !bg-white">
+            <div class="max-w-7xl mx-auto flex justify-between items-center">
+                <div class="flex items-center">
+                    <img src="https://psmvision.com/ams/public//assets/img/logo.png" alt="PSM Vision Logo" class="h-10 mr-3 filter brightness-0"> <h1 class="text-2xl font-bold text-gray-800">PSM Tools Dashboard</h1>
+                </div>
+                <div class="text-gray-600">
+                    <span id="currentDate" class="font-medium text-sm"></span>
+                </div>
+            </div>
+        </header>
+
+        <main class="flex-1 p-6 overflow-y-auto">
+            <div class="max-w-7xl mx-auto">
+                <h2 class="text-4xl font-extrabold text-gray-800 mb-8">Our Tools</h2>
+                
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
+                    
+                    <div class="glass-container dashboard-card p-6 rounded-xl flex flex-col transform hover:scale-[1.02] transition-all card-glow">
+                        <div class="flex items-center mb-4">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 tool-icon tool-icon-blue mr-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                            </svg>
+                            <h3 class="text-xl font-semibold">Aging Stock Merge (PSM-NUK)</h3>
+                        </div>
+                        <p class="mb-6 flex-grow text-sm">
+                            Merge PSM and NUK aging stock reports to get a consolidated view of stock age across both sources. Includes custom aging buckets and export options.
+                        </p>
+                        <button onclick="openTool('Aging Stock Merge PSM - NUK.html')" 
+                                class="mt-auto btn-gradient text-white font-semibold py-2 px-4 rounded-lg hover:shadow-lg transition duration-200">
+                            Open Tool
+                        </button>
+                    </div>
+
+                    <div class="glass-container dashboard-card p-6 rounded-xl flex flex-col transform hover:scale-[1.02] transition-all card-glow">
+                        <div class="flex items-center mb-4">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 tool-icon tool-icon-emerald mr-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M8 7v8l4-4 4 4V7m0 3V6a2 2 0 00-2-2H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-4M8 17h.01" />
+                            </svg>
+                            <h3 class="text-xl font-semibold">Stock Merger Dashboard</h3>
+                        </div>
+                        <p class="mb-6 flex-grow text-sm">
+                            This dashboard provides a comprehensive view of merged stock data from PSM and NUK files. Features include search, GSL filtering, stock threshold filters, and multiple export options.
+                        </p>
+                        <button onclick="openTool('PSM - NUK Merge File Maker.html')" 
+                                class="mt-auto btn-gradient text-white font-semibold py-2 px-4 rounded-lg hover:shadow-lg transition duration-200">
+                            Open Tool
+                        </button>
+                    </div>
+
+                    <div class="glass-container dashboard-card p-6 rounded-xl flex flex-col transform hover:scale-[1.02] transition-all card-glow">
+                        <div class="flex items-center mb-4">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 tool-icon tool-icon-purple mr-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+                            </svg>
+                            <h3 class="text-xl font-semibold">Invoice Generator</h3>
+                        </div>
+                        <p class="mb-6 flex-grow text-sm">
+                            Quickly generate proforma or final invoices. Features include dynamic item adding, automatic calculations, and export to PDF or XLSX.
+                        </p>
+                        <button onclick="openTool('Temprory Invoice Maker.html')" 
+                                class="mt-auto btn-gradient text-white font-semibold py-2 px-4 rounded-lg hover:shadow-lg transition duration-200">
+                            Open Tool
+                        </button>
+                    </div>
+
+                    <div class="glass-container dashboard-card p-6 rounded-xl flex flex-col transform hover:scale-[1.02] transition-all card-glow">
+                        <div class="flex items-center mb-4">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 tool-icon tool-icon-red mr-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1L19 12h2m-6 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            <h3 class="text-xl font-semibold">Aging With Price & Vendor</h3>
+                        </div>
+                        <p class="mb-6 flex-grow text-sm">
+                            A custom tool to manage aging stock, potentially incorporating price and vendor information. Specific functionalities depend on its internal implementation.
+                        </p>
+                        <button onclick="openTool('Aging With Price & Vendor/index.html')" 
+                                class="mt-auto btn-gradient text-white font-semibold py-2 px-4 rounded-lg hover:shadow-lg transition duration-200">
+                            Open Tool
+                        </button>
+                    </div>
+
+                    <div class="glass-container dashboard-card p-6 rounded-xl flex flex-col transform hover:scale-[1.02] transition-all card-glow">
+                        <div class="flex items-center mb-4">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 tool-icon tool-icon-orange mr-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            </svg>
+                            <h3 class="text-xl font-semibold">Floorstock Management</h3>
+                        </div>
+                        <p class="mb-6 flex-grow text-sm">
+                            An interface to track, manage, and update floorstock levels in real-time. Streamline inventory control and reporting directly from the floor.
+                        </p>
+                        <button onclick="openTool('Floorstock Management Interface.html')" 
+                                class="mt-auto btn-gradient text-white font-semibold py-2 px-4 rounded-lg hover:shadow-lg transition duration-200">
+                            Open Tool
+                        </button>
+                    </div>
+                    
+                </div>
+            </div>
+        </main>
+
+        <footer class="glass-container dashboard-card border-t !border-gray-200 p-4 text-center text-gray-500 text-sm mt-8 !bg-white">
+            <p>&copy; <span id="currentYear"></span> PSM Vision. All rights reserved. Developed by Prashant Kumar.</p>
+        </footer>
+    </div>
+
+    <script>
+        const CORRECT_PASSWORD = "psm"; // !!! IMPORTANT: For a client-side app, this is NOT secure.
+                                         // Anyone can view this in the browser's developer tools.
+                                         // For true security, this would need a backend server.
+
+        document.addEventListener('DOMContentLoaded', function() {
+            const passwordOverlay = document.getElementById('passwordOverlay');
+            const dashboardPasswordInput = document.getElementById('dashboardPassword');
+            const loginButton = document.getElementById('loginButton');
+            const errorMessage = document.getElementById('errorMessage');
+            const dashboardContent = document.getElementById('dashboardContent');
+            const currentDateSpan = document.getElementById('currentDate');
+            const currentYearSpan = document.getElementById('currentYear');
+
+            // Set current date and year
+            const today = new Date();
+            currentDateSpan.textContent = today.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+            currentYearSpan.textContent = today.getFullYear();
+
+            // Password Check
+            loginButton.addEventListener('click', function() {
+                if (dashboardPasswordInput.value === CORRECT_PASSWORD) {
+                    passwordOverlay.classList.add('hidden');
+                    dashboardContent.classList.remove('hidden');
+                    errorMessage.classList.add('hidden');
+                } else {
+                    errorMessage.classList.remove('hidden');
+                    dashboardPasswordInput.value = ''; // Clear password on failure
+                }
+            });
+
+            dashboardPasswordInput.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    loginButton.click();
+                }
+            });
+        });
+
+        function openTool(toolFileName) {
+            // Opens the tool in a new browser tab/window
+            window.open(toolFileName, '_blank');
+        }
+    </script>
+</body>
+</html>

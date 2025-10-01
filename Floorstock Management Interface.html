@@ -1,0 +1,685 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PSM Floorstock Manager</title>
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- NOTE: SheetJS is loaded inside the Web Worker -->
+    <!-- Google Fonts: Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
+        .modal-backdrop { background-color: rgba(0, 0, 0, 0.6); transition: opacity 0.3s ease; backdrop-filter: blur(4px); }
+        .modal-scale-in { animation: scaleIn 0.3s cubic-bezier(0.165, 0.840, 0.440, 1.000) forwards; }
+        @keyframes scaleIn {
+            from { transform: scale(0.98); opacity: 0; }
+            to { transform: scale(1); opacity: 1; }
+        }
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #e2e8f0; }
+        ::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #64748b; }
+        #csv-file-input { display: none; }
+        
+        /* Styles for Multi-select Dropdown */
+        .filter-dropdown {
+            position: absolute;
+            z-index: 10;
+            display: none;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .filter-dropdown.show { display: block; }
+        .filter-btn-active {
+            background-color: #3b82f6; /* blue-600 */
+            color: white;
+            border-color: #3b82f6;
+        }
+
+        .stat-card {
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        .stat-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.07), 0 4px 6px -4px rgb(0 0 0 / 0.07);
+        }
+        .pagination-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .stat-card.active-filter {
+            box-shadow: 0 0 0 2px #3b82f6;
+            transform: translateY(-2px);
+        }
+    </style>
+</head>
+<body class="antialiased text-gray-800">
+
+    <div class="container mx-auto p-4 sm:p-6 lg:p-8">
+        <!-- Header Section -->
+        <header class="mb-8 text-center">
+             <div class="flex justify-center items-center gap-4 mb-2">
+                <img src="https://psmvision.com/ams/public//assets/img/logo.png" alt="PSM Vision Logo" class="h-12">
+                <h1 class="text-4xl font-bold text-gray-900 tracking-tight">PSM Floorstock Manager</h1>
+            </div>
+            <p class="text-gray-600 mt-2 max-w-2xl mx-auto">A high-performance interface to import, filter, and manage your floorstock data.</p>
+        </header>
+
+        <!-- Stats Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            <div class="bg-white p-6 rounded-2xl shadow-sm stat-card">
+                <p class="text-sm font-medium text-gray-500">Filtered Products</p>
+                <p id="filtered-skus" class="text-3xl font-bold text-slate-800 mt-1">0</p>
+                <p id="total-skus-subtext" class="text-xs text-gray-400 mt-1">out of 0 total</p>
+            </div>
+            <div class="bg-white p-6 rounded-2xl shadow-sm stat-card"><p class="text-sm font-medium text-gray-500">Total Stock Items</p><p id="total-items" class="text-3xl font-bold text-slate-800 mt-1">0</p></div>
+            <div id="missing-prices-card" class="bg-white p-6 rounded-2xl shadow-sm stat-card cursor-pointer">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <p class="text-sm font-medium text-gray-500">Products Missing Prices</p>
+                        <p id="missing-prices-count" class="text-3xl font-bold text-amber-600 mt-1">0</p>
+                    </div>
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6 text-amber-500"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v12m-3-2.818.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182.79-.621 1.672-.621 2.462 0L12 6M12 18a6 6 0 1 0 0-12 6 6 0 0 0 0 12Z" /></svg>
+                </div>
+                 <p class="text-xs text-gray-400 mt-1">Click to view and edit</p>
+            </div>
+            <div class="bg-white p-6 rounded-2xl shadow-sm stat-card"><p class="text-sm font-medium text-gray-500">Total Categories</p><p id="total-categories" class="text-3xl font-bold text-orange-600 mt-1">0</p></div>
+        </div>
+
+        <!-- Main Content: Table and Controls -->
+        <div class="bg-white rounded-2xl shadow-sm overflow-hidden">
+            <!-- Controls: Search, Filters, and Actions -->
+            <div class="p-4 sm:p-6 border-b border-gray-200">
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div class="relative lg:col-span-2">
+                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                             <svg class="w-5 h-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" /></svg>
+                        </div>
+                        <input type="text" id="search-input" placeholder="Search by Name, EAN/SKU, or Brand..." class="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition shadow-sm">
+                    </div>
+                    <!-- Brand Filter -->
+                    <div class="relative">
+                        <button id="brand-filter-btn" class="w-full text-left bg-white border border-gray-300 rounded-lg shadow-sm px-4 py-2 flex items-center justify-between">
+                            <span id="brand-filter-text">All Brands</span>
+                            <svg class="w-5 h-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" /></svg>
+                        </button>
+                        <div id="brand-filter-dropdown" class="filter-dropdown w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg">
+                            <div class="p-2"><input type="text" id="brand-search" placeholder="Search brands..." class="w-full px-3 py-2 border border-gray-300 rounded-md"></div>
+                            <div id="brand-list" class="p-2 space-y-1"></div>
+                        </div>
+                    </div>
+                    <!-- Category Filter -->
+                    <div class="relative">
+                        <button id="category-filter-btn" class="w-full text-left bg-white border border-gray-300 rounded-lg shadow-sm px-4 py-2 flex items-center justify-between">
+                            <span id="category-filter-text">All Categories</span>
+                            <svg class="w-5 h-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" /></svg>
+                        </button>
+                        <div id="category-filter-dropdown" class="filter-dropdown w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg">
+                            <div class="p-2"><input type="text" id="category-search" placeholder="Search categories..." class="w-full px-3 py-2 border border-gray-300 rounded-md"></div>
+                            <div id="category-list" class="p-2 space-y-1"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="mt-4 flex flex-col sm:flex-row gap-3 items-center">
+                    <input type="file" id="csv-file-input" accept=".xlsx, .xls">
+                    
+                    <button id="import-data-btn" class="w-full sm:w-auto bg-blue-600 text-white font-semibold py-2 px-5 rounded-lg hover:bg-blue-700 transition duration-300 flex items-center justify-center gap-2 shadow-sm hover:shadow-md">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 16.5V9.75m0 0 3 3m-3-3-3 3M6.75 19.5a4.5 4.5 0 0 1-1.41-8.775 5.25 5.25 0 0 1 10.233-2.33 3 3 0 0 1 3.758 3.848A3.752 3.752 0 0 1 18 19.5H6.75Z" /></svg>
+                        Import XLSX File
+                    </button>
+                    <button id="export-data-btn" class="w-full sm:w-auto bg-green-600 text-white font-semibold py-2 px-5 rounded-lg hover:bg-green-700 transition duration-300 flex items-center justify-center gap-2 shadow-sm hover:shadow-md">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" /></svg>
+                        Export Filtered Data
+                    </button>
+                </div>
+            </div>
+
+            <!-- Table Container -->
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm text-left text-gray-500">
+                    <thead class="text-xs text-gray-700 uppercase bg-gray-50">
+                        <tr>
+                            <th scope="col" class="px-6 py-3">EAN</th>
+                            <th scope="col" class="px-6 py-3">Brand</th>
+                            <th scope="col" class="px-6 py-3">Product Name</th>
+                            <th scope="col" class="px-6 py-3">Category</th>
+                            <th scope="col" class="px-6 py-3 text-center">Stock</th>
+                            <th scope="col" class="px-6 py-3 text-right">UK Price</th>
+                            <th scope="col" class="px-6 py-3 text-right">Export Price</th>
+                            <th scope="col" class="px-6 py-3 text-center">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="stock-table-body"></tbody>
+                </table>
+            </div>
+             <div id="no-results" class="text-center py-16 text-gray-500">
+                <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path vector-effect="non-scaling-stroke" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 13h6m-3-3v6m-9 1V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" /></svg>
+                <h3 class="mt-2 text-sm font-semibold text-gray-900">No Data Loaded</h3>
+                <p class="mt-1 text-sm text-gray-500">Please import an XLSX file to begin.</p>
+            </div>
+             <!-- Pagination Controls -->
+            <div id="pagination-controls" class="p-4 border-t border-gray-200 flex items-center justify-between"></div>
+        </div>
+    </div>
+    
+    <!-- Modals -->
+    <div id="details-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 modal-backdrop hidden"><div class="bg-white rounded-2xl shadow-xl w-full max-w-2xl modal-scale-in"><div class="p-5 border-b flex justify-between items-center bg-gray-50 rounded-t-2xl"><h3 id="details-modal-title" class="text-lg font-semibold text-gray-900">Item Details</h3><button id="close-details-btn" class="text-gray-500 hover:text-gray-800 transition text-2xl leading-none">&times;</button></div><div id="details-modal-content" class="p-6 max-h-[70vh] overflow-y-auto"></div></div></div>
+    <div id="loading-modal" class="fixed inset-0 z-[100] flex items-center justify-center p-4 modal-backdrop hidden"><div class="bg-white rounded-lg p-6 flex items-center gap-4 shadow-xl"><svg class="animate-spin h-6 w-6 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg><span class="text-gray-700 font-medium">Processing file...</span></div></div>
+    <div id="error-modal" class="fixed inset-0 z-[100] flex items-center justify-center p-4 modal-backdrop hidden"><div class="bg-white rounded-2xl shadow-xl w-full max-w-md modal-scale-in text-center p-6"><div class="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-red-100"><svg class="h-6 w-6 text-red-600" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" /></svg></div><h3 class="text-lg font-semibold mt-4">Error</h3><p id="error-message" class="text-sm text-gray-500 mt-2"></p><div class="mt-6"><button id="close-error-btn" class="px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition">Close</button></div></div></div>
+    <div id="price-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 modal-backdrop hidden"><div class="bg-white rounded-2xl shadow-xl w-full max-w-md modal-scale-in"><div class="p-5 border-b"><h3 id="price-modal-title" class="text-lg font-semibold text-gray-900">Add/Edit Prices</h3></div><form id="price-form" class="p-6 space-y-4"><input type="hidden" id="price-item-id"><p id="price-modal-name" class="text-center font-semibold text-gray-800"></p><div class="grid grid-cols-2 gap-4"><div><label for="uk-price" class="block text-sm font-medium text-gray-700">UK Price (£)</label><input type="number" id="uk-price" required min="0" step="0.01" class="mt-1 block w-full border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500"></div><div><label for="export-price" class="block text-sm font-medium text-gray-700">Export Price (£)</label><input type="number" id="export-price" required min="0" step="0.01" class="mt-1 block w-full border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500"></div></div><div class="flex justify-end gap-3 pt-4"><button type="button" id="cancel-price-btn" class="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition">Cancel</button><button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">Save Prices</button></div></form></div></div>
+
+
+    <script>
+        // --- WEB WORKER SCRIPT ---
+        const workerScript = `
+            importScripts('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js');
+
+            self.onmessage = function(e) {
+                if (e.data.type === 'parseFile') {
+                    const file = e.data.file;
+                    const reader = new FileReader();
+                    reader.onload = (event) => {
+                        try {
+                            const data = new Uint8Array(event.target.result);
+                            const workbook = XLSX.read(data, { type: 'array' });
+                            const sheetName = workbook.SheetNames[0];
+                            const worksheet = workbook.Sheets[sheetName];
+                            
+                            const requiredHeaders = ['Sku', 'Brand', 'Name', 'Category', 'Final Stock', 'Uk Price', 'Export Price'];
+                            const headerRow = XLSX.utils.sheet_to_json(worksheet, { header: 1 })[0];
+                            if (!headerRow) throw new Error('Incorrect file format: The file appears to be empty or missing a header row.');
+
+                            const missingHeaders = requiredHeaders.filter(h => !headerRow.includes(h));
+                            if (missingHeaders.length > 0) {
+                                throw new Error('Incorrect file format. Missing headers: ' + missingHeaders.join(', '));
+                            }
+                            
+                            const jsonData = XLSX.utils.sheet_to_json(worksheet);
+                            const stockData = jsonData.map((row, index) => ({
+                                id: index,
+                                sku: row['Sku'] || '',
+                                brand: row['Brand'] || 'N/A',
+                                name: row['Name'] || 'N/A',
+                                category: row['Category'] || 'N/A',
+                                quantity: parseInt(row['Final Stock']) || 0,
+                                ukPrice: parseFloat(row['Uk Price']) || 0,
+                                exportPrice: parseFloat(row['Export Price']) || 0,
+                            }));
+                            
+                            self.postMessage({ success: true, type: 'parseResult', data: stockData });
+                        } catch (err) {
+                            self.postMessage({ success: false, type: 'parseResult', error: err.message });
+                        }
+                    };
+                    reader.onerror = () => {
+                         self.postMessage({ success: false, type: 'parseResult', error: 'Could not read the file.' });
+                    };
+                    reader.readAsArrayBuffer(file);
+                } else if (e.data.type === 'exportFile') {
+                    try {
+                        const { filteredData } = e.data;
+                        
+                        // 1. Map the filtered data to the desired standard export format.
+                        const dataToExport = filteredData.map(item => ({
+                            'EAN': item.sku,
+                            'Brand': item.brand,
+                            'Product Name': item.name,
+                            'UK Price': item.ukPrice,
+                            'Export Price': item.exportPrice,
+                            'Stock': item.quantity
+                        }));
+
+                        // 2. Create the worksheet from the JSON data.
+                        const worksheet = XLSX.utils.json_to_sheet(dataToExport);
+
+                        // 3. Auto-calculate column widths for better readability.
+                        const colWidths = Object.keys(dataToExport[0] || {}).map(key => ({
+                            wch: Math.max(key.length, ...dataToExport.map(row => String(row[key] || '').length)) + 2
+                        }));
+                        worksheet['!cols'] = colWidths;
+
+                        // 4. Apply number formatting for the price columns
+                        dataToExport.forEach((row, index) => {
+                            const ukPriceCellRef = XLSX.utils.encode_cell({ r: index + 1, c: 3 }); // Column D
+                            if (worksheet[ukPriceCellRef]) {
+                                worksheet[ukPriceCellRef].t = 'n';
+                                worksheet[ukPriceCellRef].z = '£#,##0.00';
+                            }
+                            const exportPriceCellRef = XLSX.utils.encode_cell({ r: index + 1, c: 4 }); // Column E
+                            if (worksheet[exportPriceCellRef]) {
+                                worksheet[exportPriceCellRef].t = 'n';
+                                worksheet[exportPriceCellRef].z = '£#,##0.00';
+                            }
+                        });
+
+                        const workbook = XLSX.utils.book_new();
+                        XLSX.utils.book_append_sheet(workbook, worksheet, "Filtered Data");
+                        
+                        const wbout = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
+                        self.postMessage({ success: true, type: 'exportResult', data: wbout }, [wbout]);
+                    } catch (err) {
+                        self.postMessage({ success: false, type: 'exportResult', error: err.message });
+                    }
+                }
+            };
+        `;
+
+        document.addEventListener('DOMContentLoaded', () => {
+            // --- DATA & STATE ---
+            let stockData = [];
+            let currentFilters = { search: '', brand: [], category: [], missingPrices: false };
+            let filteredDataCache = [];
+            let currentPage = 1;
+            const ROWS_PER_PAGE = 50;
+
+            // --- DOM ELEMENTS ---
+            const tableBody = document.getElementById('stock-table-body');
+            const noResultsDiv = document.getElementById('no-results');
+            const searchInput = document.getElementById('search-input');
+            const dataFileInput = document.getElementById('csv-file-input');
+            const importDataBtn = document.getElementById('import-data-btn');
+            const exportBtn = document.getElementById('export-data-btn');
+            const paginationControls = document.getElementById('pagination-controls');
+            // Modals
+            const detailsModal = document.getElementById('details-modal');
+            const loadingModal = document.getElementById('loading-modal');
+            const errorModal = document.getElementById('error-modal');
+            const priceModal = document.getElementById('price-modal');
+            const closeDetailsBtn = document.getElementById('close-details-btn');
+            const closeErrorBtn = document.getElementById('close-error-btn');
+            const cancelPriceBtn = document.getElementById('cancel-price-btn');
+            const priceForm = document.getElementById('price-form');
+            const errorMessageEl = document.getElementById('error-message');
+            // Stats
+            const filteredSkusEl = document.getElementById('filtered-skus');
+            const totalSkusSubtextEl = document.getElementById('total-skus-subtext');
+            const missingPricesCard = document.getElementById('missing-prices-card');
+            const missingPricesCountEl = document.getElementById('missing-prices-count');
+            // Multi-select Filters
+            const brandFilterBtn = document.getElementById('brand-filter-btn');
+            const brandFilterDropdown = document.getElementById('brand-filter-dropdown');
+            const brandSearchInput = document.getElementById('brand-search');
+            const brandListContainer = document.getElementById('brand-list');
+            const categoryFilterBtn = document.getElementById('category-filter-btn');
+            const categoryFilterDropdown = document.getElementById('category-filter-dropdown');
+            const categorySearchInput = document.getElementById('category-search');
+            const categoryListContainer = document.getElementById('category-list');
+
+            // --- WEB WORKER INITIALIZATION ---
+            const blob = new Blob([workerScript], { type: 'application/javascript' });
+            const worker = new Worker(URL.createObjectURL(blob));
+
+            worker.onmessage = (e) => {
+                showLoading(false);
+                if (!e.data.success) {
+                    showErrorModal(e.data.error);
+                    return;
+                }
+                if (e.data.type === 'parseResult') {
+                    stockData = e.data.data;
+                    populateFilters();
+                    updateAll();
+                } else if (e.data.type === 'exportResult') {
+                    const blob = new Blob([e.data.data], { type: 'application/octet-stream' });
+                    const today = new Date();
+                    const dd = String(today.getDate()).padStart(2, '0');
+                    const mm = String(today.getMonth() + 1).padStart(2, '0');
+                    let namePart = 'Floorstock';
+                    if (currentFilters.category.length > 0) {
+                        namePart = currentFilters.category.join(', ');
+                    }
+                    if (currentFilters.brand.length > 0) {
+                        namePart = (namePart === 'Floorstock' ? '' : namePart + ' - ') + currentFilters.brand.join(', ');
+                    }
+                    const filename = `Filtered_Data_${namePart}_${dd}-${mm}.xlsx`;
+                    
+                    const link = document.createElement('a');
+                    link.href = URL.createObjectURL(blob);
+                    link.download = filename;
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                }
+            };
+            
+            // --- UI & MODAL FUNCTIONS ---
+            const showLoading = (show) => loadingModal.classList.toggle('hidden', !show);
+            const showErrorModal = (message) => {
+                errorMessageEl.textContent = message;
+                errorModal.classList.remove('hidden');
+            };
+            const closeErrorModal = () => errorModal.classList.add('hidden');
+            const openDetailsModal = (item) => {
+                let stockLevelColor = 'text-green-600';
+                if (item.quantity < 25) { stockLevelColor = 'text-red-600'; } 
+                else if (item.quantity < 50) { stockLevelColor = 'text-orange-600'; }
+
+                document.getElementById('details-modal-title').textContent = `${item.name}`;
+                document.getElementById('details-modal-content').innerHTML = `
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-x-8 gap-y-6">
+                        <div class="md:col-span-2"><h4 class="text-sm font-semibold text-gray-500 uppercase tracking-wider">Item Name</h4><p class="text-lg text-gray-900">${item.name}</p></div>
+                        <div><h4 class="text-sm font-semibold text-gray-500 uppercase tracking-wider">Current Stock</h4><p class="text-2xl font-bold ${stockLevelColor}">${item.quantity.toLocaleString()}</p></div>
+                        <div><h4 class="text-sm font-semibold text-gray-500 uppercase tracking-wider">SKU (EAN)</h4><p class="text-gray-800 font-mono text-base">${item.sku}</p></div>
+                        <div><h4 class="text-sm font-semibold text-gray-500 uppercase tracking-wider">Brand</h4><p class="text-gray-800 text-base">${item.brand}</p></div>
+                        <div><h4 class="text-sm font-semibold text-gray-500 uppercase tracking-wider">Category</h4><p class="text-gray-800 text-base">${item.category}</p></div>
+                        <div class="border-t pt-4 mt-2 md:col-span-1"><h4 class="text-sm font-semibold text-gray-500 uppercase tracking-wider">UK Price</h4><p class="text-gray-800 text-lg font-semibold">£${item.ukPrice.toFixed(2)}</p></div>
+                        <div class="border-t pt-4 mt-2 md:col-span-2"><h4 class="text-sm font-semibold text-gray-500 uppercase tracking-wider">Export Price</h4><p class="text-gray-800 text-lg font-semibold">£${item.exportPrice.toFixed(2)}</p></div>
+                    </div>`;
+                detailsModal.classList.remove('hidden');
+            };
+            const closeDetailsModal = () => detailsModal.classList.add('hidden');
+
+            const openPriceModal = (item) => {
+                document.getElementById('price-item-id').value = item.id;
+                document.getElementById('price-modal-name').textContent = item.name;
+                document.getElementById('uk-price').value = item.ukPrice || 0;
+                document.getElementById('export-price').value = item.exportPrice || 0;
+                priceModal.classList.remove('hidden');
+            };
+            const closePriceModal = () => priceModal.classList.add('hidden');
+            
+            // --- CORE LOGIC ---
+            const handleDataFile = (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                showLoading(true);
+                worker.postMessage({ type: 'parseFile', file: file });
+                dataFileInput.value = '';
+            };
+            
+            const populateFilters = () => {
+                const brands = [...new Set(stockData.map(item => item.brand))].sort();
+                const categories = [...new Set(stockData.map(item => item.category))].sort();
+                createCheckboxList(brandListContainer, brands, 'brand');
+                createCheckboxList(categoryListContainer, categories, 'category');
+            };
+
+            const applyFilters = () => {
+                const searchLower = currentFilters.search.toLowerCase();
+                let dataToFilter = stockData;
+
+                // Apply missing prices filter first if active
+                if(currentFilters.missingPrices) {
+                    dataToFilter = dataToFilter.filter(item => !item.ukPrice || item.ukPrice <= 0 || !item.exportPrice || item.exportPrice <= 0);
+                }
+
+                filteredDataCache = dataToFilter.filter(item => 
+                    (currentFilters.brand.length === 0 || currentFilters.brand.includes(item.brand)) &&
+                    (currentFilters.category.length === 0 || currentFilters.category.includes(item.category)) &&
+                    (searchLower === '' ||
+                        item.name.toLowerCase().includes(searchLower) ||
+                        String(item.sku).toLowerCase().includes(searchLower) ||
+                        item.brand.toLowerCase().includes(searchLower))
+                );
+                handleFilterChange();
+            };
+            
+            const resetOtherFilters = () => {
+                searchInput.value = '';
+                currentFilters.search = '';
+                currentFilters.brand = [];
+                currentFilters.category = [];
+                // Visually reset checkboxes
+                document.querySelectorAll('#brand-list input[type="checkbox"], #category-list input[type="checkbox"]').forEach(cb => cb.checked = false);
+                updateFilterButtonText('brand');
+                updateFilterButtonText('category');
+            };
+
+            const handleFilterChange = () => {
+                currentPage = 1;
+                updateFilteredStats();
+                if (filteredDataCache.length === 1 && searchInput.value.trim() !== '' && !currentFilters.missingPrices) {
+                    openDetailsModal(filteredDataCache[0]);
+                    tableBody.innerHTML = '';
+                    noResultsDiv.classList.add('hidden');
+                    paginationControls.classList.add('hidden');
+                } else {
+                    closeDetailsModal();
+                    renderTablePage();
+                }
+            };
+            
+            const updateStats = () => {
+                document.getElementById('total-items').textContent = stockData.reduce((sum, item) => sum + item.quantity, 0).toLocaleString();
+                document.getElementById('total-categories').textContent = new Set(stockData.map(item => item.category)).size.toLocaleString();
+                missingPricesCountEl.textContent = stockData.filter(item => !item.ukPrice || item.ukPrice <= 0 || !item.exportPrice || item.exportPrice <= 0).length.toLocaleString();
+                totalSkusSubtextEl.textContent = `out of ${stockData.length.toLocaleString()} total products`;
+            };
+
+            const updateFilteredStats = () => {
+                filteredSkusEl.textContent = filteredDataCache.length.toLocaleString();
+            };
+
+            const exportData = () => {
+                if (filteredDataCache.length === 0) {
+                    showErrorModal("No filtered data to export. Try adjusting your filters.");
+                    return;
+                }
+                showLoading(true);
+                worker.postMessage({ type: 'exportFile', filteredData: filteredDataCache });
+            };
+
+            const updateAll = () => {
+                currentFilters = { search: searchInput.value, brand: [], category: [], missingPrices: false };
+                missingPricesCard.classList.remove('active-filter');
+                applyFilters();
+                updateStats();
+                updateFilterButtonText('brand');
+                updateFilterButtonText('category');
+            };
+
+            // --- MULTI-SELECT FILTER UI LOGIC ---
+            const createCheckboxList = (container, items, type) => {
+                container.innerHTML = '';
+                items.forEach(item => {
+                    const div = document.createElement('div');
+                    div.className = 'flex items-center';
+                    const checkbox = document.createElement('input');
+                    checkbox.type = 'checkbox';
+                    checkbox.id = `${type}-${item}`;
+                    checkbox.value = item;
+                    checkbox.className = 'h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500';
+                    checkbox.addEventListener('change', (e) => {
+                        const value = e.target.value;
+                        const isChecked = e.target.checked;
+                        if (isChecked) {
+                            currentFilters[type].push(value);
+                        } else {
+                            currentFilters[type] = currentFilters[type].filter(v => v !== value);
+                        }
+                        currentFilters.missingPrices = false; // Deactivate missing prices filter
+                        missingPricesCard.classList.remove('active-filter');
+                        updateFilterButtonText(type);
+                        applyFilters();
+                    });
+                    const label = document.createElement('label');
+                    label.htmlFor = `${type}-${item}`;
+                    label.textContent = item;
+                    label.className = 'ml-2 block text-sm text-gray-900';
+                    div.appendChild(checkbox);
+                    div.appendChild(label);
+                    container.appendChild(div);
+                });
+            };
+
+            const updateFilterButtonText = (type) => {
+                const count = currentFilters[type].length;
+                const btn = type === 'brand' ? brandFilterBtn : categoryFilterBtn;
+                const textEl = document.getElementById(`${type}-filter-text`);
+                if (count === 0) {
+                    textEl.textContent = type === 'brand' ? 'All Brands' : 'All Categories';
+                    btn.classList.remove('filter-btn-active');
+                } else {
+                    textEl.textContent = `${count} ${type}(s) selected`;
+                    btn.classList.add('filter-btn-active');
+                }
+            };
+            
+            const filterCheckboxList = (input, listContainer) => {
+                const filter = input.value.toLowerCase();
+                listContainer.querySelectorAll('div').forEach(div => {
+                    const label = div.querySelector('label').textContent.toLowerCase();
+                    div.style.display = label.includes(filter) ? '' : 'none';
+                });
+            };
+
+            // --- RENDERING ---
+            const renderTablePage = () => {
+                const start = (currentPage - 1) * ROWS_PER_PAGE;
+                const end = start + ROWS_PER_PAGE;
+                const pageData = filteredDataCache.slice(start, end);
+                
+                tableBody.innerHTML = '';
+                
+                if (filteredDataCache.length === 0) {
+                    noResultsDiv.classList.remove('hidden');
+                    paginationControls.classList.add('hidden');
+                    noResultsDiv.querySelector('p').textContent = stockData.length > 0 ? 'Try adjusting your search or filters.' : 'Import an XLSX file to get started.';
+                    noResultsDiv.querySelector('h3').textContent = stockData.length > 0 ? 'No Matching Products' : 'No Data Loaded';
+                    return;
+                }
+                
+                noResultsDiv.classList.add('hidden');
+                paginationControls.classList.remove('hidden');
+
+                let rowsHtml = '';
+                pageData.forEach(item => {
+                    let stockColorClass = '', rowBgClass = '';
+                    if (item.quantity < 25) { stockColorClass = 'text-red-700'; rowBgClass = 'bg-red-50 hover:bg-red-100'; } 
+                    else if (item.quantity < 50) { stockColorClass = 'text-orange-700'; rowBgClass = 'bg-orange-50 hover:bg-orange-100'; } 
+                    else { stockColorClass = 'text-green-700'; rowBgClass = 'bg-white hover:bg-gray-50'; }
+                    
+                    const hasMissingPrice = !item.ukPrice || item.ukPrice <= 0 || !item.exportPrice || item.exportPrice <= 0;
+
+                    rowsHtml += `
+                        <tr class="border-b transition-colors duration-150 ${rowBgClass}">
+                            <td class="px-6 py-4 font-medium text-gray-900 whitespace-nowrap">${item.sku}</td>
+                            <td class="px-6 py-4 text-gray-600">${item.brand}</td>
+                            <td class="px-6 py-4 font-semibold text-gray-800">${item.name}</td>
+                            <td class="px-6 py-4 text-gray-600">${item.category}</td>
+                            <td class="px-6 py-4 text-center font-bold text-lg ${stockColorClass}">${item.quantity}</td>
+                            <td class="px-6 py-4 text-right font-mono text-base font-semibold text-gray-800">${item.ukPrice > 0 ? '£' + item.ukPrice.toFixed(2) : '-'}</td>
+                            <td class="px-6 py-4 text-right font-mono text-base font-semibold text-gray-800">${item.exportPrice > 0 ? '£' + item.exportPrice.toFixed(2) : '-'}</td>
+                            <td class="px-6 py-4 text-center">
+                                ${hasMissingPrice ? 
+                                `<button data-id="${item.id}" class="add-price-btn font-medium text-amber-600 hover:text-amber-800 transition flex items-center gap-1 mx-auto">
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5"><path d="M10 3.75a2 2 0 1 0 0 4 2 2 0 0 0 0-4ZM9.25 2.5a.75.75 0 0 0 0 1.5h1.5a.75.75 0 0 0 0-1.5h-1.5Z" /><path fill-rule="evenodd" d="m.866 8.543 4.595 4.594A.75.75 0 0 0 6 12.673V15.5a.75.75 0 0 0 .75.75h2.828a.75.75 0 0 0 .53-.22l4.595-4.594a2.5 2.5 0 0 0 0-3.536l-2.086-2.085a2.5 2.5 0 0 0-3.535 0L.866 8.543Zm5.414 4.086L2.366 8.715l2.086-2.085a1 1 0 0 1 1.414 0l2.086 2.085L4.04 12.634a.75.75 0 0 0-1.06 1.06l.265.265H2.25v-.986l3.03-.024Z" clip-rule="evenodd" /></svg>
+                                    Add Price</button>` : 
+                                `<button data-id="${item.id}" class="view-btn font-medium text-blue-600 hover:text-blue-800 transition">View Details</button>`
+                                }
+                            </td>
+                        </tr>`;
+                });
+                tableBody.innerHTML = rowsHtml;
+                renderPaginationControls();
+            };
+
+            const renderPaginationControls = () => {
+                const totalPages = Math.ceil(filteredDataCache.length / ROWS_PER_PAGE);
+                if (totalPages <= 1) {
+                    paginationControls.innerHTML = '';
+                    return;
+                }
+                const startItem = (currentPage - 1) * ROWS_PER_PAGE + 1;
+                const endItem = Math.min(currentPage * ROWS_PER_PAGE, filteredDataCache.length);
+
+                paginationControls.innerHTML = `
+                    <p class="text-sm text-gray-700">Showing <span class="font-medium">${startItem}</span> to <span class="font-medium">${endItem}</span> of <span class="font-medium">${filteredDataCache.length}</span> results</p>
+                    <div class="flex gap-2">
+                        <button id="prev-page-btn" class="pagination-btn px-4 py-2 bg-white border border-gray-300 rounded-lg text-sm font-medium hover:bg-gray-50" ${currentPage === 1 ? 'disabled' : ''}>Previous</button>
+                        <button id="next-page-btn" class="pagination-btn px-4 py-2 bg-white border border-gray-300 rounded-lg text-sm font-medium hover:bg-gray-50" ${currentPage === totalPages ? 'disabled' : ''}>Next</button>
+                    </div>
+                `;
+
+                document.getElementById('prev-page-btn').addEventListener('click', () => {
+                    if (currentPage > 1) { currentPage--; renderTablePage(); }
+                });
+                document.getElementById('next-page-btn').addEventListener('click', () => {
+                    if (currentPage < totalPages) { currentPage++; renderTablePage(); }
+                });
+            };
+            
+            // --- EVENT LISTENERS ---
+            importDataBtn.addEventListener('click', () => dataFileInput.click());
+            dataFileInput.addEventListener('change', handleDataFile);
+            exportBtn.addEventListener('click', exportData);
+            searchInput.addEventListener('keyup', () => {
+                currentFilters.missingPrices = false; // Deactivate missing prices filter
+                missingPricesCard.classList.remove('active-filter');
+                currentFilters.search = searchInput.value;
+                applyFilters();
+            });
+
+            // Card filter listener
+            missingPricesCard.addEventListener('click', () => {
+                currentFilters.missingPrices = !currentFilters.missingPrices;
+                missingPricesCard.classList.toggle('active-filter', currentFilters.missingPrices);
+                if (currentFilters.missingPrices) {
+                    resetOtherFilters();
+                }
+                applyFilters();
+            });
+            
+            // Multi-select dropdown listeners
+            brandFilterBtn.addEventListener('click', (e) => { e.stopPropagation(); brandFilterDropdown.classList.toggle('show'); categoryFilterDropdown.classList.remove('show'); });
+            categoryFilterBtn.addEventListener('click', (e) => { e.stopPropagation(); categoryFilterDropdown.classList.toggle('show'); brandFilterDropdown.classList.remove('show'); });
+            brandSearchInput.addEventListener('keyup', () => filterCheckboxList(brandSearchInput, brandListContainer));
+            categorySearchInput.addEventListener('keyup', () => filterCheckboxList(categorySearchInput, categoryListContainer));
+            document.addEventListener('click', () => {
+                brandFilterDropdown.classList.remove('show');
+                categoryFilterDropdown.classList.remove('show');
+            });
+            brandFilterDropdown.addEventListener('click', e => e.stopPropagation());
+            categoryFilterDropdown.addEventListener('click', e => e.stopPropagation());
+
+            // Modal and table listeners
+            closeDetailsBtn.addEventListener('click', closeDetailsModal);
+            closeErrorBtn.addEventListener('click', closeErrorModal);
+            cancelPriceBtn.addEventListener('click', closePriceModal);
+            priceForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                const id = parseInt(document.getElementById('price-item-id').value);
+                const ukPrice = parseFloat(document.getElementById('uk-price').value);
+                const exportPrice = parseFloat(document.getElementById('export-price').value);
+
+                const itemIndex = stockData.findIndex(i => i.id === id);
+                if (itemIndex > -1) {
+                    stockData[itemIndex].ukPrice = ukPrice;
+                    stockData[itemIndex].exportPrice = exportPrice;
+                }
+                closePriceModal();
+                updateStats();
+                applyFilters();
+            });
+
+            detailsModal.addEventListener('click', (e) => { if(e.target === detailsModal) closeDetailsModal(); });
+            errorModal.addEventListener('click', (e) => { if(e.target === errorModal) closeErrorModal(); });
+            priceModal.addEventListener('click', (e) => { if(e.target === priceModal) closePriceModal(); });
+
+            tableBody.addEventListener('click', (e) => {
+                const targetButton = e.target.closest('button');
+                if (!targetButton) return;
+                
+                const id = parseInt(targetButton.dataset.id);
+                const item = stockData.find(i => i.id === id);
+                if (!item) return;
+
+                if (targetButton.classList.contains('view-btn')) {
+                    openDetailsModal(item);
+                } else if (targetButton.classList.contains('add-price-btn')) {
+                    openPriceModal(item);
+                }
+            });
+            document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { closeDetailsModal(); closeErrorModal(); closePriceModal(); } });
+
+            // --- INITIALIZATION ---
+            updateAll();
+        });
+    </script>
+</body>
+</html>
+
